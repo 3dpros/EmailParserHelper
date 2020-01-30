@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29025.244
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmailParserHelper", "EmailParserHelper\EmailParserHelper.csproj", "{4927EDFD-5D5F-4025-AAA1-16C8D05D74ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmailParserHelperTests", "EmailParserHelperTests\EmailParserHelperTests.csproj", "{414F46C7-0044-4902-8E69-6D4365B98BEA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4927EDFD-5D5F-4025-AAA1-16C8D05D74ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4927EDFD-5D5F-4025-AAA1-16C8D05D74ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4927EDFD-5D5F-4025-AAA1-16C8D05D74ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4927EDFD-5D5F-4025-AAA1-16C8D05D74ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{414F46C7-0044-4902-8E69-6D4365B98BEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{414F46C7-0044-4902-8E69-6D4365B98BEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{414F46C7-0044-4902-8E69-6D4365B98BEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{414F46C7-0044-4902-8E69-6D4365B98BEA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B8F2CA36-8344-4BAC-A7D3-8F83260C0E28}
+	EndGlobalSection
+EndGlobal
