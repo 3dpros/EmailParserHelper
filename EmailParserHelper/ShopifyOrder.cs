@@ -9,6 +9,8 @@ namespace EmailParserHelper
 {
     public class ShopifyOrder : Order
     {
+        static int AmazonProcessingDays = 4;
+        static int ShopifyProcessingDays = 6;
 
         public ShopifyOrder(string plainTextOrderEmail)
         {
@@ -22,7 +24,8 @@ namespace EmailParserHelper
             string amazonOrderPattern = @"marketplace\.amazon\.com";
             var emailAddress = Regex.Match(plainTextOrderEmail, emailAddressRegex).Groups[1].Value;
             var isAmazon = Regex.Match(emailAddress, amazonOrderPattern).Success;
-            ProcessingTimeInDays = isAmazon?3:6;
+            ProcessingTimeInDays = isAmazon? AmazonProcessingDays : ShopifyProcessingDays;
+            UseBusinessDaysForProcessingTime = !isAmazon;
         }
         //1x Weight Plate Ornament (SKU: WeightPlateOrnament_silver) - 
         //$9.00 each

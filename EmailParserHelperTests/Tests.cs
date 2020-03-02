@@ -73,6 +73,25 @@ Options: Custom Text
 Quantity:           1
 Item price:         $72.00
 
+Transaction ID:     1790457874
+Item:               Weight Plate Wall Art | Customizable 3D printed gym sign or wall sign for crossfit box
+Color: Gray
+Size/Options: 18&quot; + Custom Text
+Quantity:           1
+Item price:         $90.00
+
+
+Transaction ID:     1790761280
+Item:               Dual Color Bumper Weight Ornament | 3d printed Crossfit ornament Christmas decoration lifter, bodybuilder, fitness gift
+Color: Blue with White Text
+Set Quantity: 3
+Personalization:  Coach Whirry
+Quantity:           1
+Item price:         $48.00
+
+--------------------------------------
+Item total:         $90.00
+
 --------------------------------------
 Item total:         $125.00
 
@@ -172,6 +191,11 @@ United States
 +1 412-532-4665 ext. 47569";
             var test = new ShopifyOrder(email);
             var mystring = test.ShortDescription;
+            string orderID = "10";
+            if(int.Parse(orderID) < 1000)
+                {
+                orderID = "1" + orderID;
+            }
 
         }
 

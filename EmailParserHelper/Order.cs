@@ -55,11 +55,19 @@ namespace EmailParserHelper
         {
             get
             {
-                return AddBusinessDays(DateTime.Now, ProcessingTimeInDays);
+                if (UseBusinessDaysForProcessingTime)
+                {
+                    return AddBusinessDays(DateTime.Now, ProcessingTimeInDays);
+                }
+                else
+                {
+                    return DateTime.Now.AddDays(ProcessingTimeInDays);
+                }
             }
         }
 
         protected int ProcessingTimeInDays = 6;
+        protected bool UseBusinessDaysForProcessingTime = true;
         public static DateTime AddBusinessDays(DateTime date, int days)
         {
             if (days < 0)
@@ -109,8 +117,10 @@ namespace EmailParserHelper
         public int SizeInInches { get; set; }
         public double ItemPrice { get; set; }
         public string SKU { get; set; }
-
+        public double TotalPrice => ItemPrice * Quantity;
+        
         public bool Custom { get; set; }
+        //TODO: public bool RushShipping { get; set; }
 
         public override string ToString()
         {
@@ -125,10 +135,16 @@ namespace EmailParserHelper
             {
                 Options.Add("Size: " + SizeInInches.ToString() + " in");
             }
-            if(Options.Count > 0)
+            if (!string.IsNullOrEmpty(SKU))
+            {
+                Options.Add("SKU: " + SKU.ToString());
+            }
+
+            if (Options.Count > 0)
             {
                 baseName += " (" + string.Join(", ", Options.ToArray()) + ")";
             }
+
             return baseName;
         }
 

@@ -1,7 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net461</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath></OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <OutputPath>C:\EmailParser\emailHelper\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="AirtableClientWrapper">
+      <HintPath>..\..\OrderAutomation\AirtableClientWrapper\bin\Release\AirtableClientWrapper.dll</HintPath>
+    </Reference>
+    <Reference Include="AsanaNet">
+      <HintPath>..\..\..\..\..\..\EmailParser\Asana\AsanaNet.dll</HintPath>
+    </Reference>
+    <Reference Include="AsanaWrapper">
+      <HintPath>..\..\..\..\..\..\EmailParser\Asana\AsanaWrapper.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
 </Project>
