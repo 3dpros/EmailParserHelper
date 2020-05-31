@@ -1,15 +1,19 @@
-﻿using System;
+﻿using AirtableClientWrapper;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace EmailParserHelper
 {
     public class Order
     {
+        public string OrderUrl { get; set; } = "";
+        public string OrderID { get; set; }
         public List<Transaction> Transactions { get; set; } = new List<Transaction>();
         public string ShortDescription
         {
@@ -17,7 +21,7 @@ namespace EmailParserHelper
             {
                 var shortDescription = string.Empty;
                 var transactionStrings = (from items in Transactions
-                                          select items.ToString());
+                                          select items.GetDescription());
                 var itemsString = string.Join(" || ", transactionStrings);
                 if (string.IsNullOrEmpty(Notes))
                 {
@@ -25,7 +29,7 @@ namespace EmailParserHelper
                 }
                 else
                 {
-                    shortDescription = $"[Note] {itemsString}";
+                    shortDescription = $"[Note] {itemsString} ";
                 }
                 return shortDescription;
             }
@@ -37,16 +41,15 @@ namespace EmailParserHelper
             {
                 var longDescription = string.Empty;
                 var transactionStrings = from items in Transactions
-                                          select items.ToString();
+                                          select items.GetDescription(true);
                 var itemsString = string.Join("\r\n", transactionStrings);
-                if (string.IsNullOrEmpty(Notes))
+                longDescription = itemsString;
+
+                if (!string.IsNullOrEmpty(Notes))
                 {
-                    longDescription = itemsString;
+                    longDescription = $"Note: {Notes.Trim()} \r\n\r\n{longDescription}";
                 }
-                else
-                {
-                    longDescription = $"[Note] {itemsString}";
-                }
+                longDescription = $"{OrderUrl}\r\n{longDescription}";
                 return longDescription;
             }
         }
@@ -104,6 +107,56 @@ namespace EmailParserHelper
     {
         public string rawText { get; set; }
         public string ItemName { get; set; }
+        public string Personalization { get; set; }
+        public Dictionary<string, string> CustomFields = new Dictionary<string, string>();
+        public string PersonalizationWithSize {
+            get
+            {
+                if (SizeInInches != 0 && !Personalization.Contains(" ") && Personalization.Contains("|"))
+                {
+                    return Personalization + "|sizeOpt=" + SizeInInches.ToString();
+                }
+                else
+                {
+                    return Personalization;
+                }
+            }
+        }
+
+        public string CleanedPersonalization {
+            get
+            {
+                return HttpUtility.UrlDecode(Personalization);
+            }
+        }
+
+        /* need to move this into component once this is needed
+        public string DesignCode
+        {
+            get
+            {
+                //make sure this syncs with the designer js code
+                return Personalization.Replace("|", "&");
+            }
+        }
+        public string BaseDesignerUrl { get; set; }
+
+        public string DesignerUrlFull
+        {
+            get
+            {
+                if(!string.IsNullOrEmpty(BaseDesignerUrl) && !string.IsNullOrEmpty(Personalization))
+                {
+                    //dirty check for if it is a designer ID or something they typed
+                    if (Personalization.Contains("=") && !DesignCode.Contains(" "))
+                    {
+                        return BaseDesignerUrl + "#" + DesignCode;
+                    }
+                }
+                return string.Empty;
+            }
+        }
+        */
         public string CleanedItemName {
             get
             {
@@ -111,18 +164,100 @@ namespace EmailParserHelper
                 return getMatchingString(Regex.Match(ItemName, itemNamePattern, RegexOptions.IgnoreCase));
             }
         }
+        private static AirtableItemLookup inventoryBase = new AirtableItemLookup();
 
+        public Transaction(string sku)
+        {
+            SKU = sku;
+            ProductData = inventoryBase.FindItemRecordBySKU(SKU);
+            if (ProductData != null)
+            {
+                ItemName = ProductData.ItemName;
+                Color = ProductData.Color;
+                SizeInInches = ProductData.Size;
+            }
+        }
+
+        public Transaction(string itemName, string itemColor = "", int itemSizeInInches = 0)
+        {
+            ItemName = itemName;
+            Color = itemColor;
+            SizeInInches = itemSizeInInches;
+            ProductData = inventoryBase.FindItemRecord(ItemName, Color, SizeInInches);
+        }
+
+        private void RefreshProductData()
+        {
+            if (!string.IsNullOrEmpty(SKU))
+            {
+                if(_productData.SKU != SKU)
+                    _productData = inventoryBase.FindItemRecordBySKU(SKU);
+            }
+            if (_productData == null && !string.IsNullOrEmpty(ItemName))
+            {
+                _productData = inventoryBase.FindItemRecord(ItemName, _color, _sizeInInches);
+            }
+            if (_productData != null)
+            {
+                ItemName = _productData.ItemName;
+                _color = _productData.Color;
+                _sizeInInches = _productData.Size;
+            }
+
+        }
+
+        private InventoryProduct _productData;
+        public InventoryProduct ProductData {
+            get
+            {
+                if (_productData == null)
+                {
+                    RefreshProductData();
+                }
+                return _productData;
+            }
+            private set
+            {
+                _productData = value;
+            }
+        }
         public int Quantity { get; set; }
-        public string Color { get; set; }
-        public int SizeInInches { get; set; }
+        private string _color;
+        public string Color {
+            get
+            {
+                RefreshProductData();
+                 return _color;
+            }
+            set
+            {
+                _color = value;
+            }
+        }
+        private int _sizeInInches;
+        public int SizeInInches {
+            get
+            {
+                RefreshProductData();
+                return _sizeInInches;
+            }
+            set
+            {
+                _sizeInInches = value;
+            }
+        }
+
         public double ItemPrice { get; set; }
+        public double ItemPriceQuantity { get; set; } = 1;
+
         public string SKU { get; set; }
-        public double TotalPrice => ItemPrice * Quantity;
+        public double TotalPrice => ItemPrice * Quantity / ItemPriceQuantity;
         
         public bool Custom { get; set; }
         //TODO: public bool RushShipping { get; set; }
 
-        public override string ToString()
+        //used as the short description
+        public string GetDescription(bool longDescription = false)
         {
 
             var baseName = $"({Quantity}x) {CleanedItemName}";
@@ -139,10 +274,34 @@ namespace EmailParserHelper
             {
                 Options.Add("SKU: " + SKU.ToString());
             }
+            if (!string.IsNullOrEmpty(Personalization))
+            {
+                var personalizationLabel = longDescription ? "Personalization" : "P";
+                if (!longDescription && Personalization.Length > 30)
+                {
+                    Options.Add($"{personalizationLabel}: " + Personalization.Substring(0, 30) + "");
+                }
+                else
+                {
+                    Options.Add($"{personalizationLabel}: " + PersonalizationWithSize + "");
+                }
+            }
+            foreach(var item in CustomFields)
+            {
+                Options.Add($"{item.Key}: " + item.Value + "");
+            }
 
             if (Options.Count > 0)
             {
-                baseName += " (" + string.Join(", ", Options.ToArray()) + ")";
+                if (longDescription)
+                {
+                    baseName += "\r\n   " + string.Join("\r\n   ", Options.ToArray());
+
+                }
+                else
+                {
+                    baseName += " (" + string.Join(", ", Options.ToArray()) + ")";
+                }
             }
 
             return baseName;
@@ -155,7 +314,7 @@ namespace EmailParserHelper
     }
 
 }
-
+/*
 public class MyScriptBasedEmailParser // do not modify class name
 {
     // Modify this method to implement your own text capturing
@@ -239,4 +398,4 @@ public class MyScriptBasedEmailParser // do not modify class name
     }
 
 }
-
+*/

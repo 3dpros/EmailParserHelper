@@ -18,47 +18,152 @@ namespace EmailParserHelper
     {
         public static bool AddOrder(NameValueCollection fields, ref List<string> log, bool dryRun = false)
         {
+            fields.Add("NotificationEmailAddresses", dryRun ? "altbillington@gmail.com" : "altbillington@gmail.com, daniel.c.english@gmail.com");
+
+            var automation = new Automation(dryRun);
+            var result = automation.ProcessOrder(fields);
+            log = automation.Log;
+            return result;
+        }
+
+        public static bool CreateManualInventoryOrder(string componentName, int quantity)
+        {
+            var inventoryBase = new AirtableItemLookup();
+            var auto = new Automation();
+            var component = inventoryBase.GetComponentByName(componentName, false);
+            if (component != null)
+            {
+                auto.GenerateInventoryRequest(component, quantity);
+                return true;
+            }
+            return false;
+        }
+
+        public static bool CompleteInventoryOrder(NameValueCollection fields, ref List<string> log, bool dryRun = false)
+        {
             try
             {
-                fields.Add("NotificationEmailAddresses", dryRun ? "altbillington@gmail.com" : "altbillington@gmail.com, daniel.c.english@gmail.com");
-
-                log.Add("Starting Airtable Entry (v2)");
+                var match = Regex.Match(fields["Task Name"], @"\((\d+)\s*\/\s*(\d+)\)\s*(.*)");
+                var quantityCompleted = int.Parse(match.Groups[1].Value);
+                var quantityRequested = int.Parse(match.Groups[2].Value);
+                var componentName = match.Groups[3].Value;
 
                 var inventoryBase = new AirtableItemLookup();
-                var ATbase = new AirtableOrders();
+                var component = inventoryBase.GetComponentByName(componentName);
 
-                var Asana = new AsanaWrapper("0/7874fd8b3c16d982812217283e75c450", "3D Pros", "Etsy Orders");
-                
-                var orderID = fields["Order ID"];
+                var auto = new Automation();
+                auto.CompleteInventoryRequest(component, quantityCompleted, quantityRequested);
+                return true;
+            }
+            catch (Exception e)
+            {
+                log.Add("Exception Occurred:" + e.Message + e.ToString());
+                fields.Add("FailReason", e.Message + e.ToString());
+                return false;
+            }
+    }
+        public static bool AsanaNotification(NameValueCollection fields, ref List<string> log)
+        {
+            var emails = new List<KeyValuePair<string, string>>()
+                {
+                    new KeyValuePair<string, string>("Al Billington","altbillington@gmail.com"),
+                    //new KeyValuePair<string, string>("Kyle Perkuhn","3dproskyle@gmail.com"),
+                    new KeyValuePair<string, string>("Daniel English","daniel.c.english@gmail.com"),
+                };
+            var emailsToNotify = new List<string>();
+            var commentMatches = Regex.Match(fields["LastComment"], "(.*) added a comment.(.*) -").Groups;
+            var commenter = commentMatches[1].Value;
+            fields["LastComment"] = commentMatches[2].Value;
+
+            //remove weird hyperlink that is put where the @mention should be, if present
+            if (fields["LastComment"].Contains("list"))
+            {
+                fields["LastComment"] = Regex.Match(fields["LastComment"], "list (.*)").Groups[1].Value;
+            }
+
+            foreach (var pair in emails)
+            {
+                if (fields["BodyHTML"].Contains("@" + pair.Key))
+                {
+                    if (!commenter.ToLowerInvariant().Contains(pair.Key.ToLowerInvariant()))
+                    {
+                        emailsToNotify.Add(pair.Value);
+                    }
+                }
+            }
+            fields["NotificationEmail"] = string.Join(", ", emailsToNotify.ToArray());
+
+
+            return emailsToNotify.Count > 0;
+        }
+
+    }
+    public class Automation
+    {
+        private const string HighPriorityProjectName = "AHigh Priority";
+
+        private AirtableItemLookup inventoryBase = new AirtableItemLookup();
+        private AirtableOrders ATbase = new AirtableOrders();
+        bool dryRun;
+        private string etsyOrdersBoardName;
+        AsanaWrapper Asana;
+        public List<string> Log = new List<string>();
+
+        public Automation(bool testing = false)
+        {
+            etsyOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
+            Asana = new AsanaWrapper("0/7874fd8b3c16d982812217283e75c450", "3D Pros", etsyOrdersBoardName);
+            dryRun = testing;
+        }
+
+        public bool ProcessOrder(NameValueCollection fields)
+        {
+            Log.Add("Starting Airtable Entry (v2)");
+
+            try
+            {
                 var channel = fields["Channel"].ToLower();
+                bool UseSKUsForItemLookup;
+                Log.Add("parsing order using channel: " + channel);
 
-                log.Add("Checking Order " + orderID);
+                Order orderData;
+                if (channel == "shopify" || channel == "amazon")
+                {
+                    orderData = new EmailParserHelper.ShopifyOrder(fields["body"]);
+                    UseSKUsForItemLookup = true;
+                }
+                else if (channel == "etsy")
+                {
+                    orderData = new EmailParserHelper.EtsyOrder(fields["body"]);
+                    UseSKUsForItemLookup = false;
+                }
+                else
+                {
+                    throw new Exception("Unknown channel specified: " + channel);
+                }
+
+                var productOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
+                var orderID = fields["Order ID"];
                 //only create if it doesn't yet exist
+                if (string.IsNullOrEmpty(orderID))
+                {
+                    fields.Add("FailReason", "Invalid or empty order ID");
+                    Log.Add("Order already exists in airtable:" + fields["Short Description"]);
+                    return false;
+                }
+                Log.Add("Checking Order ID: " + orderID);
                 if (dryRun || ATbase.GetRecordByOrderID(orderID, out _) == null)
                 {
-                    log.Add("Populating Order");
+                    Log.Add("Populating Order");
 
                     var owner = "";
-                    
-                    bool UseSKUsForItemLookup;
+                    var DescriptionAddendum = ""; //hack until description is migrated from email parser
+
+  
                     var hasCustomComponents = false;
                     var hasInventoryComponents = false;
 
-                    Order orderData;
-                    if (channel == "shopify" || channel == "amazon")
-                    {
-                        orderData = new EmailParserHelper.ShopifyOrder(fields["body"]);
-                        UseSKUsForItemLookup = true;
-                    }
-                    else if (channel == "etsy")
-                    {
-                        orderData = new EmailParserHelper.EtsyOrder(fields["body"]);
-                        UseSKUsForItemLookup = false;
-                    }
-                    else
-                    {
-                        throw new Exception("Unknown channel specified: " + channel);
-                    }
+
                     if (!string.IsNullOrEmpty(orderData.ShortDescription))
                     {
                         //for now manually generated orders dont have a short description from the helper, use the email parser one
@@ -72,81 +177,129 @@ namespace EmailParserHelper
                     foreach (var transaction in orderData.Transactions)
                     {
                         TransactionTypes currentTransactionType;
-                        ItemData currentRecord;
+                        InventoryProduct currentProductData;
                         if (UseSKUsForItemLookup)
                         {
-                            currentRecord = inventoryBase.FindItemRecordBySKU(transaction.SKU);
+                            currentProductData = inventoryBase.FindItemRecordBySKU(transaction.SKU);
                         }
                         else
                         {
-                            currentRecord = inventoryBase.FindItemRecord(transaction.ItemName, transaction.Color, transaction.SizeInInches);
+                            currentProductData = inventoryBase.FindItemRecord(transaction.ItemName, transaction.Color, transaction.SizeInInches);
                         }
-                        if (currentRecord == null)
+                        if(transaction.ProductData != currentProductData)
+                        {
+                            Log.Add("ASSERT: order productdata does not match addOrder productData: " + transaction.ItemName);
+                        }
+                        if (currentProductData == null)
                         {
                             //if any item in the order is custom, the whole order is custom
                             hasCustomComponents = true;
                             currentTransactionType = TransactionTypes.UntrackedCustom;
-                            log.Add("Found Untracked Custom Item: " + transaction.ItemName);
+                            Log.Add("Found Untracked Custom Item: " + transaction.ItemName);
                         }
                         else
                         {
-                            if (currentRecord.IsInventory() && !transaction.Custom)
+                            // add a link to the internal designer with the design code
+                            if (!string.IsNullOrEmpty(currentProductData.BaseUrl))
+                            {
+                                DescriptionAddendum += "\n" + currentProductData.BaseUrl;
+                                // ditching this until asana API supports special characters
+                                //if (!string.IsNullOrEmpty(transaction.DesignerUrlFull))
+                                // {
+                                //    if (transaction.SizeInInches != 0)
+                                   // {
+                                       // DescriptionAddendum += "|sizeOpt=" + transaction.SizeInInches.ToString();
+                                   // }
+                                //    log.Add("found designer code: URL is " + DescriptionAddendum);
+                                //}
+                                //else
+                                //{
+                                //if the personalization isn't a design code, link the base designer page anyway for convenience   
+                                Log.Add("item has a designer: URL is " + DescriptionAddendum);
+                                // }
+                            }
+                            if (currentProductData.IsInventory() 
+                                && !transaction.Custom 
+                                && transaction.Quantity < currentProductData.MaximumInventoryQuantity)
                             {
                                 hasInventoryComponents = true;
                                 currentTransactionType = TransactionTypes.Inventory;
-                                log.Add("Found Inventory Item: " + transaction.ItemName);
+                                Log.Add("Found Inventory Item: " + transaction.ItemName);
                             }
                             else
                             {
-                                log.Add("Found Tracked Custom Item: " + transaction.ItemName);
+                                Log.Add("Found Tracked Custom Item: " + transaction.ItemName + " (" + currentProductData.ItemName + ")");
                                 currentTransactionType = TransactionTypes.TrackedCustom;
                                 hasCustomComponents = true;
                             }
 
                             //the material cost of the order is the sum of the material cost for all items in the order
-                            totalMaterialCost += currentRecord.GetMaterialCost() * transaction.Quantity;
+                            totalMaterialCost += currentProductData.MaterialCost * transaction.Quantity;
+
                         }
-                        transactionRecords.Add(new TransactionRecord() {
+
+                        // add all transactions to a list including untracked items
+                        transactionRecords.Add(new TransactionRecord()
+                        {
                             Transaction = transaction,
-                            Record = currentRecord,
-                            TransactionType = currentTransactionType });
+                            Record = currentProductData,
+                            TransactionType = currentTransactionType
+                        });
                     }
 
-                    log.Add("Has Custom Components:" + (hasCustomComponents ? "yes" : "no"));
-                    log.Add("Has Inventory Components:" + (hasInventoryComponents ? "yes" : "no"));
+                    // determine the list of potential printers for the order. this is ther intersection of the potential printers 
+                    HashSet<string> printersForOrderHashSet = null;
+                    string preferredPrinter = "";
+                    foreach (var transactionRecord in transactionRecords)
+                    {
+                        if (transactionRecord.TransactionType != TransactionTypes.UntrackedCustom)
+                        {
+                            List<string> printersForProduct;
+                            inventoryBase.GetPotentialPrintersList(transactionRecord.Record, out printersForProduct, out preferredPrinter);
+                            //ignore if printers in empty, which means anyone can print the product
+                            if (printersForProduct != null && printersForProduct.Count > 0)
+                            {
+                                if (printersForOrderHashSet == null)
+                                {
+                                    printersForOrderHashSet = new HashSet<string>(printersForProduct);
+                                }
+                                else
+                                {
+                                    printersForOrderHashSet.IntersectWith(printersForProduct);
+                                }
+                            }
+                        }
+                    }
+                    var potentialPrinters = printersForOrderHashSet?.ToArray();
+                    var printersString = GetPrinterDetailsString(ref owner, potentialPrinters, preferredPrinter);
+                    Log.Add(printersString);
+                    DescriptionAddendum += "\n\n" + printersString;
 
-                    log.Add("Total Material Cost:" + totalMaterialCost);
-                    log.Add("Adding Order " + orderID.ToString());
-                    var projects = new List<string>() { "Etsy Orders" };
+                    Log.Add("Has Custom Components:" + (hasCustomComponents ? "yes" : "no"));
+                    Log.Add("Has Inventory Components:" + (hasInventoryComponents ? "yes" : "no"));
+
+                    Log.Add("Total Material Cost:" + totalMaterialCost);
+                    Log.Add("Adding Order " + orderID.ToString());
+                    var projects = new List<string>() { productOrdersBoardName };
 
                     foreach (var transactionRecord in transactionRecords)
                     {
-                        List<ItemComponentData> components = new List<ItemComponentData>();
-                        if (!dryRun)
-                            inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Record, transactionRecord.Transaction.Quantity, out components, orderID);
-                        foreach (ItemComponentData component in components)
+                        if (transactionRecord.TransactionType != TransactionTypes.UntrackedCustom)
                         {
-                            //create a new inventory request if needed
-                            if (component.IsBelowThreshhold())
+                            List<InventoryComponent> components = new List<InventoryComponent>();
+                            if (!dryRun)
                             {
-                                //update already takes batch into account so only do it once
-                                inventoryBase.UpdateComponentForInventoryRequest(component);
-
-                                for (int i = 0; i < component.NumberOfBatches; i++)
+                                inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Record, transactionRecord.Transaction.Quantity, out components, orderID);
+                            }
+                            else
+                            {
+                               // components = transactionRecord.Record.
+                            }                                
+                            foreach (InventoryComponent component in components)
+                            {
+                                if (component.IsBelowThreshhold())
                                 {
-                                    string cardName = $"({component.BatchSize.ToString()}/{component.BatchSize.ToString()}) {component.Name}";
-                                    DateTime dueDate = DateTime.Today.AddDays(10);
-
-                                    var inventoryOrder = ATbase.newOrderData("I_" + Guid.NewGuid().ToString());
-                                    inventoryOrder.Channel = "Internal";
-                                    inventoryOrder.Description = cardName;
-                                    inventoryOrder.DueDate = dueDate;
-                                    if (!dryRun)
-                                    {
-                                        var invAsanaTask = Asana.AddTask(cardName, component.Details, new List<string>() { "Etsy Orders", "Inventory Requests" }, dueDate);
-                                        inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
-                                        ATbase.CreateOrderRecord(inventoryOrder);
-                                    }
+                                    GenerateInventoryRequest(component);
                                 }
                             }
                         }
@@ -158,7 +311,8 @@ namespace EmailParserHelper
                                               where record.TransactionType == TransactionTypes.Inventory
                                               select record.Transaction.TotalPrice).Sum();
                     order.MaterialCost = totalMaterialCost;
-                    order.Notes = fields["Long Description"];
+                    //TODO: implement this in this library and not in an email parser step
+                    order.Notes = ((channel == "etsy")?orderData.LongDescription: fields["Long Description"]) + DescriptionAddendum;
                     order.ShippingCharge = Double.Parse(fields["Shipping Charge"]);
                     order.TotalPrice = Double.Parse(fields["Order Total"]);
                     order.Description = fields["Short Description"];
@@ -186,18 +340,18 @@ namespace EmailParserHelper
                         {
                             if (item.TransactionType == TransactionTypes.Inventory)
                             {
-                                inventoryPackingList.Add(item.ToString());
+                                inventoryPackingList.Add(item.GetDescription());
                             }
                             else if (item.TransactionType == TransactionTypes.TrackedCustom || item.TransactionType == TransactionTypes.UntrackedCustom)
                             {
-                                customPackingList.Add(item.ToString());
+                                customPackingList.Add(item.GetDescription());
                             }
                         }
                         order.Notes += "\r\n\r\n" + string.Join("\r\n", inventoryPackingList.ToArray()) + "\r\n\r\n" + string.Join("\r\n", customPackingList.ToArray());
                     }
                     if (order.Rush)
                     {
-                        projects.Add("AHigh Priority");
+                        projects.Add(HighPriorityProjectName);
                         order.Description = "[Priority]" + order.Description;
                     }
 
@@ -207,48 +361,116 @@ namespace EmailParserHelper
                         order.AsanaTaskID = asanaTask.ID.ToString();
                         ATbase.CreateOrderRecord(order);
                     }
+                    else
+                    {
+                        var asanaTask = Asana.AddTask(order.Description, order.Notes, new List<string>() { productOrdersBoardName }, order.DueDate, owner);
+                    }
                 }
                 else
                 {
                     fields.Add("FailReason", "Order already in airtable");
-                    log.Add("Order already exists in airtable:" + fields["Short Description"]);
+                    Log.Add("Order already exists in airtable:" + fields["Short Description"]);
                     return false;
                 }
             }
             catch (Exception e)
             {
-                log.Add("Exception Occurred:" + e.Message + e.ToString());
+                Log.Add("Exception Occurred:" + e.Message + e.ToString());
                 fields.Add("FailReason", e.Message + e.ToString());
                 return false;
             }
             return true;
         }
 
-        public static bool CompleteInventoryOrder(NameValueCollection fields, ref List<string> log, bool dryRun = false)
+        public void CompleteInventoryRequest(InventoryComponent component, int quantityCompleted, int quantityRequested)
         {
-            try
-            {
+            var inventoryBase = new AirtableItemLookup();
+            Log.Add("Inventory order completed, updating counts");
+            Log.Add("Update count of " + component.Name + " by +" + quantityCompleted.ToString());
+            Log.Add("Original request was for " + quantityRequested.ToString());
 
-                var inventoryBase = new AirtableItemLookup();
-                log.Add("Inventory order, update counts");
-                // var match = Regex.Match(fields["Task Name"], @"\((\d+)x\)\s*(.*)");
-                var match = Regex.Match(fields["Task Name"], @"\((\d+)\s*\/\s*(\d+)\)\s*(.*)");
-                log.Add("match 1");
-                var quantity = int.Parse(match.Groups[1].Value);
-                var originalQuantity = int.Parse(match.Groups[2].Value);
-                var componentName = match.Groups[3].Value;
-                log.Add("Inventory order, update count of " + componentName + " by +" + quantity.ToString());
-                inventoryBase.UpdateComponentQuantityByName(componentName, quantity, originalQuantity);
-
-            }
-            catch (Exception e)
-            {
-                log.Add("Exception Occurred:" + e.Message + e.ToString());
-                fields.Add("FailReason", e.Message + e.ToString());
-                return false;
-            }
-            return true;
+            inventoryBase.UpdateComponentQuantity(component, quantityCompleted, quantityRequested);
         }
+
+        /// <summary>
+        /// generate an inventory request using quantity determined by the component metadata
+        /// </summary>
+        public void GenerateInventoryRequest(InventoryComponent component)
+        {
+            GenerateInventoryRequestCore(component, component.BatchSize, component.NumberOfBatches);
+        }
+
+        /// <summary>
+        /// generate an inventory request for an arbitrary quantity
+        /// </summary>
+        public void GenerateInventoryRequest(InventoryComponent component, int quantity)
+        {
+            GenerateInventoryRequestCore(component, quantity, 1, "(generated manually)");
+        }
+        private void GenerateInventoryRequestCore(InventoryComponent component, int quantityPerBatch, int batches, string noteAddendum = "")
+        {
+            for (int i = 0; i < batches; i++)
+            {
+                inventoryBase.LogInventoryRequestCreation(component, quantityPerBatch);
+                string cardName = $"(0/{quantityPerBatch.ToString()}) {component.Name}";
+                DateTime dueDate = DateTime.Today.AddDays(10);
+
+                var inventoryOrder = ATbase.newOrderData("I_" + Guid.NewGuid().ToString());
+                inventoryOrder.Channel = "Internal";
+                inventoryOrder.Description = cardName;
+                inventoryOrder.DueDate = dueDate;
+                inventoryOrder.TotalPrice = component.InternalPrice * quantityPerBatch;
+                List<string> printerNames;
+                string preferredInvPrinter;
+                string inventoryOrderOwner = "";
+
+                inventoryBase.GetPotentialPrintersList(component, out printerNames, out preferredInvPrinter);
+                var inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
+                inventoryOrder.Notes = "available quantity when this card was created: " + component.Quantity.ToString() +
+                    "\nnumber pending when order was created: " + component.Pending +
+                    "\n" + component.Details +
+                    "\n" + inventoryOrderPrintersString+
+                    "\n\n" + noteAddendum;
+
+                var inventoryTrackingBoardName = component.IsExternal ? "Parts Order Requests" : "Inventory Requests";
+                var orderProjects = new List<string>() { etsyOrdersBoardName, inventoryTrackingBoardName };
+
+                // mark as high priority if we don't have many in stock
+                if ((component.Quantity + i * quantityPerBatch) < (quantityPerBatch * batches) / 2)
+                {
+                    orderProjects.Add(HighPriorityProjectName);
+                }
+                var invAsanaTask = Asana.AddTask(cardName, inventoryOrder.Notes, orderProjects, inventoryOrder.DueDate, inventoryOrderOwner);
+                Log.Add("added task to asana" + cardName);
+                if (!dryRun)
+                {
+                    inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
+                    ATbase.CreateOrderRecord(inventoryOrder);
+                }
+            }
+                     
+        }
+
+        private static string GetPrinterDetailsString(ref string owner, string[] potentialPrinters, string preferredPrinter)
+        {
+            if (potentialPrinters?.Length > 0)
+            {
+                var PrintersString = "Potential Printers: " + string.Join(", ", potentialPrinters);
+                if (potentialPrinters.Length == 1)
+                {
+                    owner = potentialPrinters[0];
+                }
+                //only show preferred printer if there are multiple options
+                else if (!string.IsNullOrEmpty(preferredPrinter))
+                {
+                    PrintersString += "\nPreferred Printer: " + preferredPrinter;
+                }
+                return PrintersString;
+            }
+            return "";
+        }
+
+        
         
 
     }
@@ -266,10 +488,12 @@ namespace EmailParserHelper
 
         public TransactionTypes TransactionType { set; get; }
         public Transaction Transaction { set; get; }
-        public ItemData Record { set; get; }
-        public override string ToString()
+        public InventoryProduct Record { set; get; }
+
+
+        public string GetDescription()
         {
-            return Transaction.ToString();
+            return Transaction.GetDescription();
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using Xunit;
 using EmailParserHelper;
+using AirtableClientWrapper;
 using System.Collections.Generic;
 
 namespace EmailParserHelperTests
@@ -42,6 +43,7 @@ Shop:               Al Billington
 Transaction ID:     1738164749
 Item:               Clitoris Ornament 3-Pack | 3D printed Full Size Anatomical Model of Clitoris
 Set Quantity: 3
+OtherOption: 32
 Quantity:           1
 Item price:         $65.00
 
@@ -77,6 +79,8 @@ Transaction ID:     1790457874
 Item:               Weight Plate Wall Art | Customizable 3D printed gym sign or wall sign for crossfit box
 Color: Gray
 Size/Options: 18&quot; + Custom Text
+Personalization:  I : Like colons
+
 Quantity:           1
 Item price:         $90.00
 
@@ -85,9 +89,20 @@ Transaction ID:     1790761280
 Item:               Dual Color Bumper Weight Ornament | 3d printed Crossfit ornament Christmas decoration lifter, bodybuilder, fitness gift
 Color: Blue with White Text
 Set Quantity: 3
-Personalization:  Coach Whirry
+Personalization:  This is line one of two
+here is the other line
 Quantity:           1
 Item price:         $48.00
+
+
+Transaction ID:     1872006280
+Item:               Weight Plate Custom Text Clock | Customizable 3D printed gift for workout room, gym clock for crossfit
+Size: 15&quot;
+Personalization:  TopText=Maguire%E2%80%99s|BottomText=JIM&#39;S|color=gray
+Quantity:           1
+Item price:         $68.00
+
+
 
 --------------------------------------
 Item total:         $90.00
@@ -142,9 +157,15 @@ please contact our support team: http://www.etsy.com/help/contact
 Etsy
 
 ";
-            var test = new EtsyOrder(email);
-            var mystring = test.ShortDescription;
+            var sut = new EtsyOrder(email);
+
+            Assert.Equal("1518764068", sut.OrderID);
+            Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
+            Assert.Equal(8, sut.Transactions.Count);
+
+            var mystring = sut.LongDescription;
         }
+
 
         [Fact]
         public void ParseShopifyEmail()
@@ -152,7 +173,7 @@ Etsy
                         var email = @"
 *  1x Full Size Model Clitoris (Gold) - Gold (SKU:ClitorisModel_gold) - $14.00 each ]]
 *  2x Dumbbell - Gold | test () - $22.00 each ]]
-*  3x Weight Plate - Gold () - $34.00 each ]]
+*  3x Weight Plate - Gold (SKU:WeightPlateClock_11in) - $34.00 each ]]
 _____
 Order Note:
 
@@ -189,14 +210,42 @@ MIAMI, Florida  33174-1961
 United States
 
 +1 412-532-4665 ext. 47569";
-            var test = new ShopifyOrder(email);
-            var mystring = test.ShortDescription;
-            string orderID = "10";
-            if(int.Parse(orderID) < 1000)
-                {
-                orderID = "1" + orderID;
-            }
+            var sut = new ShopifyOrder(email);
 
+
+        }
+
+        [Fact]
+        public void CreateInventoryRequestOrder()
+        {
+             var inventoryBase = new AirtableItemLookup();
+
+             var test = new Automation();
+             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
+             var previousQuantity = component.Quantity;
+             var previousPending = component.Pending;
+             test.GenerateInventoryRequest(component, 3);
+            Assert.Equal(component.Quantity, previousQuantity);
+            Assert.True(component.Pending - previousPending == 3);
+            previousPending = component.Pending;
+
+            test.GenerateInventoryRequest(component);
+            Assert.Equal(component.Quantity, previousQuantity);
+            Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
+        }
+        [Fact]
+        public void CompleteInventoryRequestOrder()
+        {
+            var inventoryBase = new AirtableItemLookup();
+
+            var test = new Automation();
+            var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
+            var previousQuantity = component.Quantity;
+            var previousPending = component.Pending;
+            test.CompleteInventoryRequest(component, 3, 5);
+            inventoryBase.UpdateComponentRecord(component);
+            Assert.True(component.Quantity - previousQuantity == 3);
+            Assert.True(component.Pending - previousPending == -5);
         }
 
     }

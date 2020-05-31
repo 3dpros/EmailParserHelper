@@ -45,10 +45,9 @@ namespace EmailParserHelper
                      setQuantity = int.Parse(setQuantityString);
                 }
 
-                var transaction = new Transaction()
+                var transaction = new Transaction(sku: sku)
                 {
                     ItemName = itemName,
-                    SKU = sku,
                     Quantity = int.Parse(quantity) * setQuantity,
                 };
 

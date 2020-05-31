@@ -1,19 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Web;
 
 namespace EmailParserHelper
 {
     public class EtsyOrder : Order
     {
+
         public EtsyOrder(string plainTextEtsyOrderEmail)
         {
             string orderRegex = "Transaction ID(.|\\r|\\n)*?price:.*";
+
             var matches = Regex.Matches(plainTextEtsyOrderEmail, orderRegex);
 
             var matchStrings = from Match item in matches
-                                select item.Groups[0].Value;
+                               select item.Groups[0].Value;
             InitializeEtsyEmailTransactions(matchStrings.ToList());
 
             string orderNotePattern = "Note [^\n]*\n-*(.*?)-{10}";
@@ -23,6 +25,13 @@ namespace EmailParserHelper
             {
                 Notes = orderNote;
             }
+
+            string OrderURLPattern = "http://www.etsy.com/your/orders/(\\d*)";
+            OrderUrl = Regex.Match(plainTextEtsyOrderEmail, OrderURLPattern, RegexOptions.Singleline)?.Groups[0]?.Value;
+            OrderID = Regex.Match(plainTextEtsyOrderEmail, OrderURLPattern, RegexOptions.Singleline)?.Groups[1]?.Value;
+
+
+
         }
 
 
@@ -35,30 +44,52 @@ namespace EmailParserHelper
             {
                 var lines = orderText.Split('\n');
                 var entries = new Dictionary<string, string>();
-                foreach(var line in lines)
+                var key = "";
+                foreach (var line in lines)
                 {
-                    var pair = line.Split(':');
+                    var multiLineSupportedKeys = new List<string>{ "personalization" };
+                    char[] separator = { ':' };
+                    var pair = line.Split(separator, 2);
+
                     if (pair.Length >= 2)
                     {
-                        var key = pair[0].ToLower().Trim();
+                        key = pair[0].ToLower().Trim();
                         if (!entries.ContainsKey(key))
                         {
-                            entries.Add(pair[0].ToLower().Trim(), pair[1].ToLower().Trim());
+                            entries.Add(pair[0].ToLower().Trim(), HttpUtility.HtmlDecode(pair[1].Trim()));
                         }
+                    }
+                    //for multiline fields, check if there is a colon, and if not add it as a new line instead of a new field
+                    if(pair.Length == 1 && multiLineSupportedKeys.Contains(key) && pair[0].Trim() != string.Empty)
+                    {
+                        entries[key] += $" / {HttpUtility.HtmlDecode(pair[0])}";
                     }
                 }
 
-                var transaction = new Transaction()
+                var transaction = new Transaction(itemName: entries["item"])
                 {
-                    ItemName = entries["item"],
                     rawText = orderText,
                     Quantity = int.Parse(new string(entries["quantity"].TakeWhile(char.IsDigit).ToArray())),
-
                 };
-
+                entries.Remove("quantity");
+                if(entries.ContainsKey("transaction id"))
+                {
+                    entries.Remove("transaction id");
+                }
+                if (entries.ContainsKey("item"))
+                {
+                    entries.Remove("item");
+                }
                 if (entries.ContainsKey("item price"))
                 {
-                    transaction.ItemPrice = double.Parse(entries["item price"].Remove(0,1));
+                    transaction.ItemPrice = double.Parse(entries["item price"].Remove(0, 1));
+                    entries.Remove("item price");
+                }
+                if (entries.ContainsKey("personalization"))
+                {
+                    transaction.Personalization = entries["personalization"];
+                    entries.Remove("personalization");
+
                 }
                 foreach (var colorKey in new string[] { "color", "colour" })
                 {
@@ -69,6 +100,7 @@ namespace EmailParserHelper
                         {
                             transaction.Custom = true;
                         }
+                        entries.Remove(colorKey);
                     }
                 }
                 foreach (var sizeKey in new string[] { "size", "size/options", "height", "length" })
@@ -83,11 +115,16 @@ namespace EmailParserHelper
                         {
                             transaction.SizeInInches = int.Parse(new string(entries[sizeKey].TakeWhile(char.IsDigit).ToArray()));
                         }
+                        entries.Remove(sizeKey);
                     }
                 }
                 if (entries.ContainsKey("set quantity"))
                 {
-                    transaction.Quantity *= int.Parse(new string(entries["set quantity"].TakeWhile(char.IsDigit).ToArray()));
+                    var setQuantity = int.Parse(new string(entries["set quantity"].TakeWhile(char.IsDigit).ToArray()));
+                    transaction.Quantity *= setQuantity;
+                    entries.Remove("set quantity");
+                    transaction.ItemPriceQuantity = setQuantity;
+
                 }
                 if (entries.ContainsKey("options"))
                 {
@@ -95,6 +132,11 @@ namespace EmailParserHelper
                     {
                         transaction.Custom = true;
                     }
+                    entries.Remove("options");
+                }
+                if (entries.Count > 0)
+                {
+                    transaction.CustomFields = entries;
                 }
                 Transactions.Add(transaction);
             }

@@ -18,4 +18,10 @@
     <ProjectReference Include="..\EmailParserHelper\EmailParserHelper.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="AirtableClientWrapper">
+      <HintPath>..\..\OrderAutomation\AirtableClientWrapper\bin\Debug\AirtableClientWrapper.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

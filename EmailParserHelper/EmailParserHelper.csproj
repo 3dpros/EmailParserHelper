@@ -22,6 +22,7 @@
     <Reference Include="AsanaWrapper">
       <HintPath>..\..\..\..\..\..\EmailParser\Asana\AsanaWrapper.dll</HintPath>
     </Reference>
+    <Reference Include="System.Web" />
   </ItemGroup>
 
 </Project>
