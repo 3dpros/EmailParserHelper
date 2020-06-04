@@ -7,12 +7,11 @@ namespace EmailParserHelper
 {
     public class EtsyOrder : Order
     {
-
-        public EtsyOrder(string plainTextEtsyOrderEmail)
+        public EtsyOrder(string plainTextEtsyOrderEmail) : base(plainTextEtsyOrderEmail)
         {
             string orderRegex = "Transaction ID(.|\\r|\\n)*?price:.*";
 
-            var matches = Regex.Matches(plainTextEtsyOrderEmail, orderRegex);
+            var matches = Regex.Matches(EmailBody, orderRegex);
 
             var matchStrings = from Match item in matches
                                select item.Groups[0].Value;
@@ -20,20 +19,32 @@ namespace EmailParserHelper
 
             string orderNotePattern = "Note [^\n]*\n-*(.*?)-{10}";
             string noOrderNotesPattern = "The buyer did not leave a note.";
-            var orderNote = Regex.Match(plainTextEtsyOrderEmail, orderNotePattern, RegexOptions.Singleline).Groups[1].Value;
+            var orderNote = Regex.Match(EmailBody, orderNotePattern, RegexOptions.Singleline).Groups[1].Value;
             if (!orderNote.Contains(noOrderNotesPattern))
             {
                 Notes = orderNote;
             }
 
-            string OrderURLPattern = "http://www.etsy.com/your/orders/(\\d*)";
-            OrderUrl = Regex.Match(plainTextEtsyOrderEmail, OrderURLPattern, RegexOptions.Singleline)?.Groups[0]?.Value;
-            OrderID = Regex.Match(plainTextEtsyOrderEmail, OrderURLPattern, RegexOptions.Singleline)?.Groups[1]?.Value;
-
-
+            OrderID = MatchRegex(OrderURLPattern, 1);
+            SalesTax = MatchNumber(@"Tax\:\s *\$([^\n]*)", 1);
+            Customer.Email = MatchRegex(@"Email\s*([^\n\r]*)?",1);
+            Customer.Username = MatchRegex(@"Note from\s*([^\n\r]*)?",1);
+            OrderTotal = MatchNumber(@"Order Total\:\s*\$\s*([^\n\r]*)?",1);
+            ShippingCharge = MatchNumber(@"Shipping\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
 
         }
 
+
+        private readonly string OrderURLPattern = "http://www.etsy.com/your/orders/(\\d*)";
+
+
+        public override string OrderUrl
+        {
+            get
+            {
+                return MatchRegex(OrderURLPattern);
+            }
+        }
 
         private void InitializeEtsyEmailTransactions(List<string> transactionEmailStrings)
         {

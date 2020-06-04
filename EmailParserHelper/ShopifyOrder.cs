@@ -12,7 +12,9 @@ namespace EmailParserHelper
         static int AmazonProcessingDays = 4;
         static int ShopifyProcessingDays = 6;
 
-        public ShopifyOrder(string plainTextOrderEmail)
+
+
+        public ShopifyOrder(string plainTextOrderEmail) : base(plainTextOrderEmail)
         {
             string orderRegex = @"\*\s*(\d+x\s.*?)-\s*\$";
             var matches = Regex.Matches(plainTextOrderEmail, orderRegex, RegexOptions.Singleline);
@@ -24,9 +26,24 @@ namespace EmailParserHelper
             string amazonOrderPattern = @"marketplace\.amazon\.com";
             var emailAddress = Regex.Match(plainTextOrderEmail, emailAddressRegex).Groups[1].Value;
             var isAmazon = Regex.Match(emailAddress, amazonOrderPattern).Success;
+
             ProcessingTimeInDays = isAmazon? AmazonProcessingDays : ShopifyProcessingDays;
             UseBusinessDaysForProcessingTime = !isAmazon;
+
+            OrderID = MatchRegex(@"Order ID\:\s*([\d]*)", 1);
+            Customer.Email = MatchRegex(@"Customer Email\:\s*([^\n\r]*)?", 1);
+            OrderTotal = MatchNumber(@"Total Payment\:\s*\$\s*([^\n\r]*)?", 1);
+            ShippingCharge = MatchNumber(@"Shipping Cost\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
         }
+
+        public override string OrderUrl
+        {
+            get
+            {
+                return MatchRegex(@"Order URL\:\r\n([^\n\r]*)?", 1);
+            }
+        }
+
         //1x Weight Plate Ornament (SKU: WeightPlateOrnament_silver) - 
         //$9.00 each
 

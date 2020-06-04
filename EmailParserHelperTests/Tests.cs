@@ -11,7 +11,85 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var email = @"------------------------------------------------------
+            var sut = new EtsyOrder(etsyEmail);
+
+            Assert.Equal("1518764068", sut.OrderID);
+            Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
+            Assert.Equal(8, sut.Transactions.Count);
+
+            var mystring = sut.LongDescription;
+        }
+
+
+        [Fact]
+        public void ParseShopifyEmail()
+        {
+                        
+            var sut = new ShopifyOrder(shopifyEmail);
+
+
+        }
+
+        [Fact]
+        public void CreateInventoryRequestOrder()
+        {
+            var inventoryBase = new AirtableItemLookup();
+
+            var test = new Automation();
+            var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
+            var previousQuantity = component.Quantity;
+            var previousPending = component.Pending;
+            test.GenerateInventoryRequest(component, 3);
+            Assert.Equal(component.Quantity, previousQuantity);
+            Assert.True(component.Pending - previousPending == 3);
+            previousPending = component.Pending;
+
+            test.GenerateInventoryRequest(component);
+            Assert.Equal(component.Quantity, previousQuantity);
+            Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
+        }
+
+        string shopifyEmail = @"
+*  1x Full Size Model Clitoris (Gold) - Gold (SKU:ClitorisModel_gold) - $14.00 each ]]
+*  2x Dumbbell - Gold | test () - $22.00 each ]]
+*  3x Weight Plate - Gold (SKU:WeightPlateClock_11in) - $34.00 each ]]
+_____
+Order Note:
+
+Shipping Cost: $2.04
+
+Total Payment: $14.05
+
+Customer Name: Miguel Rodriguez
+
+Customer Email: 8djhv99rxh409qr@marketplace.asmazon.com
+
+Order URL:
+https://liftergifts.myshopify.com/admin/orders/1853957537907
+
+Order ID: 1853957537907
+
+Order Name: #1130
+
+Payment processing method:
+
+amazon_marketplace
+
+Delivery method:
+FreeEconomy
+
+Shipping address:
+
+Miguel Rodriguez
+
+501 SW 98TH PL
+
+MIAMI, Florida  33174-1961
+
+United States
+
++1 412-532-4665 ext. 47569";
+        string etsyEmail = @"------------------------------------------------------
 Your Etsy Order
 ------------------------------------------------------
 
@@ -118,7 +196,7 @@ Discount:          -$3.90
 --------------------------------------
 Subtotal:           $121.10
 
-Shipping:           $0.00  ()
+Shipping:           $2.00  ()
 Sales Tax:          $8.79
 --------------------------------------
 Order Total:        $129.89
@@ -157,82 +235,28 @@ please contact our support team: http://www.etsy.com/help/contact
 Etsy
 
 ";
-            var sut = new EtsyOrder(email);
-
-            Assert.Equal("1518764068", sut.OrderID);
-            Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
-            Assert.Equal(8, sut.Transactions.Count);
-
-            var mystring = sut.LongDescription;
-        }
-
 
         [Fact]
-        public void ParseShopifyEmail()
+        public void CreateEtsyOrder()
         {
-                        var email = @"
-*  1x Full Size Model Clitoris (Gold) - Gold (SKU:ClitorisModel_gold) - $14.00 each ]]
-*  2x Dumbbell - Gold | test () - $22.00 each ]]
-*  3x Weight Plate - Gold (SKU:WeightPlateClock_11in) - $34.00 each ]]
-_____
-Order Note:
+            var inventoryBase = new AirtableItemLookup();
 
-Shipping Cost: $0.00
-
-Total Payment: $14.00
-
-Customer Name: Miguel Rodriguez
-
-Customer Email: 8djhv99rxh409qr@marketplace.asmazon.com
-
-Order URL:
-https://liftergifts.myshopify.com/admin/orders/1853957537907
-
-Order ID: 1853957537907
-
-Order Name: #1130
-
-Payment processing method:
-
-amazon_marketplace
-
-Delivery method:
-FreeEconomy
-
-Shipping address:
-
-Miguel Rodriguez
-
-501 SW 98TH PL
-
-MIAMI, Florida  33174-1961
-
-United States
-
-+1 412-532-4665 ext. 47569";
-            var sut = new ShopifyOrder(email);
-
+            var test = new Automation(true);
+            Order order;
+            test.ProcessOrder(etsyEmail, "etsy", out order);
 
         }
 
         [Fact]
-        public void CreateInventoryRequestOrder()
+        public void CreateShopifyOrder()
         {
-             var inventoryBase = new AirtableItemLookup();
+            var inventoryBase = new AirtableItemLookup();
 
-             var test = new Automation();
-             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
-             var previousQuantity = component.Quantity;
-             var previousPending = component.Pending;
-             test.GenerateInventoryRequest(component, 3);
-            Assert.Equal(component.Quantity, previousQuantity);
-            Assert.True(component.Pending - previousPending == 3);
-            previousPending = component.Pending;
-
-            test.GenerateInventoryRequest(component);
-            Assert.Equal(component.Quantity, previousQuantity);
-            Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
+            var test = new Automation(true);
+            Order order;
+            test.ProcessOrder(shopifyEmail, "shopify", out order);
         }
+
         [Fact]
         public void CompleteInventoryRequestOrder()
         {
