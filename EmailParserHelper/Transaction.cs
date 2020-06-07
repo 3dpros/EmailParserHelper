@@ -91,6 +91,7 @@ namespace EmailParserHelper
 
         private void RefreshProductData()
         {
+
             if (!string.IsNullOrEmpty(SKU))
             {
                 if(_productData.SKU != SKU)
@@ -100,7 +101,7 @@ namespace EmailParserHelper
             {
                 _productData = inventoryBase.FindItemRecord(ItemName, _color, _sizeInInches);
             }
-            if (_productData != null)
+            if (_productData != null && !string.IsNullOrEmpty(SKU))
             {
                 ItemName = _productData.ItemName;
                 _color = _productData.Color;
@@ -129,7 +130,6 @@ namespace EmailParserHelper
         public string Color {
             get
             {
-                RefreshProductData();
                  return _color;
             }
             set
@@ -141,7 +141,6 @@ namespace EmailParserHelper
         public int SizeInInches {
             get
             {
-                RefreshProductData();
                 return _sizeInInches;
             }
             set

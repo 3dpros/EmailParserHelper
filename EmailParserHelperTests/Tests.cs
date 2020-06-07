@@ -26,16 +26,28 @@ namespace EmailParserHelperTests
         {
                         
             var sut = new ShopifyOrder(shopifyEmail);
-
+            Assert.Equal("1130", sut.OrderID);
+            Assert.Equal(114.05, sut.OrderTotal);
+            Assert.Equal("https://liftergifts.myshopify.com/admin/orders/1853957537907", sut.OrderUrl);
+            Assert.Equal(2.04, sut.ShippingCharge);
+            Assert.Equal(3, sut.Transactions.Count);
 
         }
+
+        [Fact]
+        public void CompleteOrder()
+        {
+            var test = new Automation(true);
+            test.CompleteOrder("1663955060", "1.25");
+        }
+
 
         [Fact]
         public void CreateInventoryRequestOrder()
         {
             var inventoryBase = new AirtableItemLookup();
 
-            var test = new Automation();
+            var test = new Automation(true);
             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             var previousQuantity = component.Quantity;
             var previousPending = component.Pending;
@@ -58,7 +70,7 @@ Order Note:
 
 Shipping Cost: $2.04
 
-Total Payment: $14.05
+Total Payment: $114.05
 
 Customer Name: Miguel Rodriguez
 
@@ -180,7 +192,12 @@ Personalization:  TopText=Maguire%E2%80%99s|BottomText=JIM&#39;S|color=gray
 Quantity:           1
 Item price:         $68.00
 
-
+Transaction ID:     1921038848
+Item:               3D Printed UT Tower Model | Austin Skyline Downtown Building
+Height: 6 Inches
+Base Option: No Base
+Quantity:           1
+Item price:         $28.00
 
 --------------------------------------
 Item total:         $90.00
@@ -224,7 +241,7 @@ http://www.etsy.com/conversations/new?with_id=247009438
 
             Or
 
-            * Email phillip.adler6 @gmail.com
+            * Email phillip.adler6@gmail.com
 
              ------------------------------------------------------
 
@@ -243,7 +260,7 @@ Etsy
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(etsyEmail, "etsy", out order);
+            test.ProcessOrder(etsyEmail, "Etsy", out order);
 
         }
 
@@ -254,7 +271,7 @@ Etsy
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(shopifyEmail, "shopify", out order);
+            test.ProcessOrder(shopifyEmail, "Shopify", out order);
         }
 
         [Fact]

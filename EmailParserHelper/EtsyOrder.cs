@@ -125,6 +125,10 @@ namespace EmailParserHelper
                         }
                         {
                             transaction.SizeInInches = int.Parse(new string(entries[sizeKey].TakeWhile(char.IsDigit).ToArray()));
+                            if(transaction.SizeInInches == 0)
+                            {
+                                transaction.SizeInInches = int.Parse(Regex.Match(entries[sizeKey], @"\d*").Value);
+                            }
                         }
                         entries.Remove(sizeKey);
                     }

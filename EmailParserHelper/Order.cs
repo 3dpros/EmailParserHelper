@@ -15,26 +15,37 @@ namespace EmailParserHelper
         }
         public string EmailBody { get; }
         public abstract string OrderUrl { get; }
+        public string OrderUrlMarkdown {
+            get
+            {
+                return $"[{OrderID}]({OrderUrl})";
+            }
+        }
+
         public string OrderID { get; set; }
         public List<Transaction> Transactions { get; set; } = new List<Transaction>();
+        public string OneLineDescription
+        {
+            get
+            {
+                return GetDescription("  ||  ");
+            }
+        }
         public string ShortDescription
         {
             get
             {
-                var shortDescription = string.Empty;
-                var transactionStrings = (from items in Transactions
-                                          select items.GetDescription());
-                var itemsString = string.Join(" || ", transactionStrings);
-                if (string.IsNullOrEmpty(Notes))
-                {
-                    shortDescription = itemsString;
-                }
-                else
-                {
-                    shortDescription = $"[Note] {itemsString} ";
-                }
-                return shortDescription;
+                return GetDescription("\r\n");
             }
+        }
+
+        private string GetDescription(string delimiter)
+        {
+            var shortDescription = string.Empty;
+            var transactionStrings = (from items in Transactions
+                                      select items.GetDescription());
+            var itemsString = string.Join(delimiter, transactionStrings);
+            return itemsString;
         }
 
         public string LongDescription
@@ -51,7 +62,6 @@ namespace EmailParserHelper
                 {
                     longDescription = $"Note: {Notes.Trim()} \r\n\r\n{longDescription}";
                 }
-                longDescription = $"{OrderUrl}\r\n{longDescription}";
                 return longDescription;
             }
         }

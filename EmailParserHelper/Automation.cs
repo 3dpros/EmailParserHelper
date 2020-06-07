@@ -10,6 +10,7 @@ using System.Collections.Specialized;
 using AirtableClientWrapper;
 using AsanaAPI;
 using System.Text.RegularExpressions;
+using AsanaNet;
 //using AsanaNet;
 //using AirtableApiClient;
 namespace EmailParserHelper
@@ -19,7 +20,9 @@ namespace EmailParserHelper
         private const string HighPriorityProjectName = "AHigh Priority";
 
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
-        private AirtableOrders ATbase = new AirtableOrders();
+        private AirtableOrders ATbase;
+        private AirtableOrderTracking ATTrackingBase = new AirtableOrderTracking();
+
         bool dryRun;
         private string etsyOrdersBoardName;
         AsanaWrapper Asana;
@@ -30,28 +33,29 @@ namespace EmailParserHelper
             etsyOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
             Asana = new AsanaWrapper("0/7874fd8b3c16d982812217283e75c450", "3D Pros", etsyOrdersBoardName);
             dryRun = testing;
+            ATbase = new AirtableOrders(testing);
         }
 
         public bool ProcessOrder(string emailBody, string channel, out Order orderData)
         {
             Log.Add("Starting Airtable Entry (v2)");
-            channel = channel.ToLower();
+            var channelKey = channel.ToLower();
             bool UseSKUsForItemLookup;
-            Log.Add("parsing order using channel: " + channel);
+            Log.Add("parsing order using channel: " + channelKey);
 
-            if (channel == "shopify" || channel == "amazon")
+            if (channelKey == "shopify" || channelKey == "amazon")
             {
                 orderData = new EmailParserHelper.ShopifyOrder(emailBody);
                 UseSKUsForItemLookup = true;
             }
-            else if (channel == "etsy")
+            else if (channelKey == "etsy")
             {
                 orderData = new EmailParserHelper.EtsyOrder(emailBody);
                 UseSKUsForItemLookup = false;
             }
             else
             {
-                throw new Exception("Unknown channel specified: " + channel);
+                throw new Exception("Unknown channel specified: " + channelKey);
             }
 
             var productOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
@@ -59,7 +63,7 @@ namespace EmailParserHelper
             //only create if it doesn't yet exist
             if (string.IsNullOrEmpty(orderID))
             {
-                var errorMsg = "Order already exists in airtable:" + orderData.ShortDescription;
+                var errorMsg = "Order already exists in airtable:" + orderData.OneLineDescription;
                 Log.Add(errorMsg);
                 throw new System.Exception(errorMsg);
             }
@@ -101,8 +105,8 @@ namespace EmailParserHelper
                         //if any item in the order is custom, the whole order is custom
                         hasCustomComponents = true;
                         currentTransactionType = TransactionTypes.UntrackedCustom;
-                        inventoryBase.AddProductRecord(transaction.ItemName);
-                        Log.Add("Found Untracked Custom Item: " + transaction.ItemName + ". Adding it to catalog.");
+                        inventoryBase.AddProductRecord(transaction.CleanedItemName, transaction.Color, transaction.SizeInInches);
+                        Log.Add($"Found Untracked Custom Item: {transaction.CleanedItemName} {transaction.Color} {transaction.SizeInInches}. Adding it to catalog.");
                     }
                     else
                     {
@@ -218,7 +222,6 @@ namespace EmailParserHelper
                                             where record.TransactionType == TransactionTypes.Inventory
                                             select record.Transaction.TotalPrice).Sum();
                 airtableOrder.MaterialCost = totalMaterialCost;
-                //TODO: implement this in this library and not in an email parser step
                 airtableOrder.Notes = orderData.LongDescription + DescriptionAddendum;
                 airtableOrder.ShippingCharge = orderData.ShippingCharge;
                 airtableOrder.TotalPrice = orderData.OrderTotal;
@@ -228,6 +231,8 @@ namespace EmailParserHelper
                 airtableOrder.Rush = (airtableOrder.ShippingCharge > 0 && airtableOrder.ShippingCharge < 12);
                 airtableOrder.SalesTax = orderData.SalesTax;
                 airtableOrder.CustomerEmail = orderData.Customer.Email;
+                airtableOrder.OrderURL = orderData.OrderUrl;
+
 
                 //used for notification emails to show actual profit
 
@@ -263,24 +268,132 @@ namespace EmailParserHelper
                 Log.Add("assigning to owner: " + owner);
                 airtableOrder.PrintOperator = owner;
 
-                if (!dryRun)
-                {
-                    var asanaTask = Asana.AddTask(airtableOrder.Description, airtableOrder.Notes, projects, airtableOrder.DueDate, owner);
-                    airtableOrder.AsanaTaskID = asanaTask.ID.ToString();
-                    ATbase.CreateOrderRecord(airtableOrder);
-                }
-                else
-                {
-                    var asanaTask = Asana.AddTask(airtableOrder.Description, airtableOrder.Notes, new List<string>() { productOrdersBoardName }, airtableOrder.DueDate, owner);
-                }
+
+                var asanaTask = Asana.AddTask(orderData.OneLineDescription, $"{airtableOrder.OrderURL}\r\n{airtableOrder.Notes}", dryRun?(new List<string>() { productOrdersBoardName }):projects, airtableOrder.DueDate, owner);
+                airtableOrder.AsanaTaskID = asanaTask.ID.ToString();
+
+                ATbase.CreateOrderRecord(airtableOrder);
+                var orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
+                orderTracking.IncludedItems = (from record in transactionRecords
+                                               select record?.Record?.UniqueName)?.ToList();
+                orderTracking.Description = orderData.ShortDescription;
+                orderTracking.OrderURL = orderData.OrderUrlMarkdown;
+                ATTrackingBase.CreateOrderRecord(orderTracking);
+
             }
             else
             {
-                var errorMsg = "Order already exists in airtable:" + orderData.ShortDescription;
+                var errorMsg = "Order already exists in airtable:" + orderData.OneLineDescription;
                 Log.Add(errorMsg);
                 throw new Exception(errorMsg);
             }           
             return true;
+        }
+
+        public bool CompleteOrder(string orderID, string shippingCost)
+        {
+            Log.Add("Starting Airtable Entry");
+
+            //string orderID = fields["Order ID"];
+
+            Log.Add("Checking Order " + orderID);
+
+            var ATid = "";
+            var airtableOrderRecord = ATbase.GetRecordByOrderID(orderID, out ATid);
+            Log.Add("Got Airtable Record");
+            if (airtableOrderRecord != null)
+            {
+                Log.Add("Record Exists");
+
+                var asanaID = airtableOrderRecord.AsanaTaskID;
+                if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord.ShipDate.Year < 2010))
+                {
+                    Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
+                    return true;
+                }
+                if (asanaID != "")
+                {
+                    Log.Add("Checking Asana ID " + asanaID);
+                    AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
+
+                    var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
+
+                    Log.Add("Found Asana Task For " + asanaID);
+                    if (currentTask.Assignee != null)
+                    {
+                        if (currentTask.Assignee != null)
+                        {
+                            airtableOrderRecord.PrintOperator = currentTask.Assignee.Name;
+                            //airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
+                            Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
+                        }
+
+                        airtableOrderRecord.Shipper = GetShipperName(currentTask, currentTask.Assignee.Name);
+                        //airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
+                        Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
+
+                        airtableOrderRecord.ShippingCost = double.Parse(shippingCost);
+                        Log.Add("Setting actual shipping cost to " + airtableOrderRecord.ShippingCost.ToString());
+
+                        airtableOrderRecord.ShipDate = DateTime.Now;
+                        Log.Add("Setting shipped date to " + airtableOrderRecord.ShipDate.ToString());
+
+                        Log.Add("Order Exists, updating " + orderID.ToString());
+                        ATbase.CreateOrderRecord(airtableOrderRecord, true);
+                        ATTrackingBase.CreateOrderRecord(airtableOrderRecord, true);
+
+                        var inventoryBase = new AirtableItemLookup();
+                        inventoryBase.UpdateCompletedOrderComponentEntries(orderID);
+
+                        if (!dryRun)
+                        {
+                            currentTask.Delete();
+                        }
+                        if (orderTrackingRecord != null)
+                        {
+                            orderTrackingRecord.ShipDate = airtableOrderRecord.ShipDate;
+                        }
+                    }
+                    else
+                    {
+                        Log.Add("No owner assigned for " + orderID.ToString());
+                    }
+                }
+                else
+                {
+                    Log.Add("Blank asana ID");
+                    return true;
+                }
+            }
+            else
+            {
+                Log.Add("Order was not found in airtable, no action taken");
+                return true;
+            }
+            return true;
+        }
+
+        private static string GetShipperName(AsanaTask currentTask, string printOperator)
+        {
+            var shipperNameMap = new Dictionary<string, string>()
+        {
+            {"Shipper", "Leah"}
+        };
+
+            var projectNames = new List<string>();
+            foreach (var project in currentTask.Projects)
+            {
+                projectNames.Add(project.Name);
+            }
+
+            foreach (var item in shipperNameMap)
+            {
+                if (projectNames.Contains(item.Key))
+                {
+                    return item.Value;
+                }
+            }
+            return printOperator;
         }
 
         public void CompleteInventoryRequest(InventoryComponent component, int quantityCompleted, int quantityRequested)
@@ -348,13 +461,15 @@ namespace EmailParserHelper
                 inventoryOrder.PrintOperator = inventoryOrderOwner;
                 var invAsanaTask = Asana.AddTask(cardName, inventoryOrder.Notes, orderProjects, inventoryOrder.DueDate, inventoryOrderOwner);
                 Log.Add("added task to asana" + cardName);
-                if (!dryRun)
-                {
-                    inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
-                    ATbase.CreateOrderRecord(inventoryOrder);
-                }
+
+                inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
+
+                ATbase.CreateOrderRecord(inventoryOrder);
+                var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);
+                inventoryOrderTrackingData.IsInventoryRequest = true;
+                ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
             }
-                     
+
         }
 
         private static string GetPrinterDetailsString(ref string owner, string[] potentialPrinters, string preferredPrinter)

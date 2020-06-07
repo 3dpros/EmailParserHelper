@@ -30,7 +30,7 @@ namespace EmailParserHelper
             ProcessingTimeInDays = isAmazon? AmazonProcessingDays : ShopifyProcessingDays;
             UseBusinessDaysForProcessingTime = !isAmazon;
 
-            OrderID = MatchRegex(@"Order ID\:\s*([\d]*)", 1);
+            OrderID = MatchRegex(@"Order Name:\s*#\s*([\d]*)", 1);
             Customer.Email = MatchRegex(@"Customer Email\:\s*([^\n\r]*)?", 1);
             OrderTotal = MatchNumber(@"Total Payment\:\s*\$\s*([^\n\r]*)?", 1);
             ShippingCharge = MatchNumber(@"Shipping Cost\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
