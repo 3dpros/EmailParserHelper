@@ -33,16 +33,22 @@ namespace EmailParserHelper
             }
         }
 
-        /* need to move this into component once this is needed
+        /* need to move this into component once this is needed */
         public string DesignCode
         {
             get
             {
                 //make sure this syncs with the designer js code
-                return Personalization.Replace("|", "&");
+                return PersonalizationWithSize.Replace("|", "&");
             }
         }
-        public string BaseDesignerUrl { get; set; }
+        public string BaseDesignerUrl
+        {
+            get
+            {
+                return ProductData.BaseUrl;
+            }
+        }
 
         public string DesignerUrlFull
         {
@@ -59,7 +65,7 @@ namespace EmailParserHelper
                 return string.Empty;
             }
         }
-        */
+        
         public string CleanedItemName {
             get
             {

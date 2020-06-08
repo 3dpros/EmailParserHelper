@@ -74,8 +74,8 @@ namespace EmailParserHelper
 
                 var owner = "";
                 var DescriptionAddendum = ""; //hack until description is migrated from email parser
+                var DesignerURL = ""; //hack until description is migrated from email parser
 
-  
                 var hasCustomComponents = false;
                 var hasInventoryComponents = false;
 
@@ -114,20 +114,18 @@ namespace EmailParserHelper
                         if (!string.IsNullOrEmpty(currentProductData.BaseUrl))
                         {
                             DescriptionAddendum += "\n" + currentProductData.BaseUrl;
+                            DesignerURL = currentProductData.BaseUrl;
                             // ditching this until asana API supports special characters
-                            //if (!string.IsNullOrEmpty(transaction.DesignerUrlFull))
-                            // {
-                            //    if (transaction.SizeInInches != 0)
-                                // {
-                                    // DescriptionAddendum += "|sizeOpt=" + transaction.SizeInInches.ToString();
-                                // }
-                            //    log.Add("found designer code: URL is " + DescriptionAddendum);
-                            //}
-                            //else
-                            //{
+                            if (!string.IsNullOrEmpty(transaction.DesignerUrlFull))
+                             {
+                                DesignerURL = transaction.DesignerUrlFull;
+
+                            }
+                            else
+                            {
                             //if the personalization isn't a design code, link the base designer page anyway for convenience   
-                            Log.Add("item has a designer: URL is " + DescriptionAddendum);
-                            // }
+                            Log.Add("item has a designer: URL is " + DesignerURL);
+                            }
                         }
                         if (currentProductData.IsInventory() 
                             && !transaction.Custom 
@@ -278,6 +276,15 @@ namespace EmailParserHelper
                                                select record?.Record?.UniqueName)?.ToList();
                 orderTracking.Description = orderData.ShortDescription;
                 orderTracking.OrderURL = orderData.OrderUrlMarkdown;
+                orderTracking.DesignerURL = DesignerURL;
+                if(!string.IsNullOrEmpty(owner))
+                {
+                    orderTracking.Stage = "Assigned";
+                    if (!hasCustomComponents && hasInventoryComponents)
+                    {
+                        orderTracking.Stage = "Ship";
+                    }
+                }
                 ATTrackingBase.CreateOrderRecord(orderTracking);
 
             }

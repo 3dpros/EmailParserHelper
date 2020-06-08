@@ -252,17 +252,111 @@ please contact our support team: http://www.etsy.com/help/contact
 Etsy
 
 ";
+        string etsyEmailDesignCode = @"------------------------------------------------------
+Your Etsy Order
+------------------------------------------------------
+
+Hi Al Billington,
+
+We've finished processing your Etsy sale of one item.
+
+Your order number is 1676111371.
+
+View the invoice: 
+http://www.etsy.com/your/orders/1676111371
+
+------------------------------------------------------
+Note from oye5rdfl:
+------------------------------------------------------
+
+Top text in all caps: STELLAR
+Bottom text in all caps: FITNESS
+Color: black
+Thank you!
+
+
+------------------------------------------------------
+Order Details
+------------------------------------------------------
+
+Shop:               Al Billington
+
+--------------------------------------
+
+Transaction ID:     1931393625
+Item:               Weight Plate Custom Text Clock | Customizable 3D printed gift for workout room, gym clock for crossfit
+Size: 11&quot;
+Personalization:  TopText=STELLAR|BottomText=FITNESS|color=black
+Quantity:           1
+Item price:         $56.00
+
+--------------------------------------
+Item total:         $56.00
+
+
+
+
+Shipping:           $0.00  ()
+Sales Tax:          $4.34
+--------------------------------------
+Order Total:        $60.34
+
+
+Shipping Address:
+<address >
+
+<span class='name'>Carolina Tjhin</span><br/><span class='first-line'>111 Cradle Bar Court</span><br/><span class='city'>FOLSOM</span>, <span class='state'>CA</span> <span class='zip'>95630</span><br/><span class='country-name'>United States</span>
+<br/>
+
+
+<!-- Hidden Fields -->
+
+<!-- Address Verification -->
+
+</address>
+
+------------------------------------------------------
+Contacting the Buyer
+------------------------------------------------------
+
+* Send a message with Etsy's messaging system:
+http://www.etsy.com/conversations/new?with_id=284844832
+
+Or
+
+* Email lularoecarolinahylton @gmail.com
+
+------------------------------------------------------
+
+If you have questions or were not involved in this transaction,
+please contact our support team: http://www.etsy.com/help/contact
+
+Thanks,
+Etsy
+";
 
         [Fact]
+        public void CreateEtsyOrderDesignCode()
+        {
+            var inventoryBase = new AirtableItemLookup();
+
+            var test = new Automation(true);
+            Order order;
+            test.ProcessOrder(etsyEmailDesignCode, "Etsy", out order);
+
+        }
+        [Fact]
+
         public void CreateEtsyOrder()
         {
             var inventoryBase = new AirtableItemLookup();
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(etsyEmail, "Etsy", out order);
+            test.ProcessOrder(etsyEmailDesignCode, "Etsy", out order);
 
         }
+
 
         [Fact]
         public void CreateShopifyOrder()

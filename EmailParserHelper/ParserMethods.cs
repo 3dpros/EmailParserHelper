@@ -16,14 +16,25 @@ namespace EmailParserHelper
         public static bool AddOrder(NameValueCollection fields, ref List<string> log, bool dryRun = false)
         {
             fields.Add("NotificationEmailAddresses", dryRun ? "altbillington@gmail.com" : "altbillington@gmail.com, daniel.c.english@gmail.com");
-
             var automation = new Automation(dryRun);
-            Order OrderData;
-            var result = automation.ProcessOrder(fields["body"], fields["Channel"], out OrderData);
-            fields.Add("NotificationEmailSubject", (dryRun ? "(TEST)" : "") + "[" + (OrderData.OrderTotal - OrderData.ShippingCharge).ToString("C") + "]" + OrderData.OneLineDescription);
 
-            log = automation.Log;
-            return result;
+            try
+            {
+                Order OrderData;
+                var result = automation.ProcessOrder(fields["body"], fields["Channel"], out OrderData);
+                fields.Add("NotificationEmailSubject", (dryRun ? "(TEST)" : "") + "[" + (OrderData.OrderTotal - OrderData.ShippingCharge).ToString("C") + "]" + OrderData.OneLineDescription);
+                log = automation.Log;
+                return result;
+            }
+            catch (Exception e)
+            {
+                log = automation.Log;
+                log.Add(e.Message);
+                log.Add(e.StackTrace);
+                log.Add(e.ToString());
+            }
+            return false;
+
         }
 
         public static bool ProcessShippedProductOrder(ref List<string> log, NameValueCollection fields, bool dryRun = false)
