@@ -3,10 +3,11 @@ using Xunit;
 using EmailParserHelper;
 using AirtableClientWrapper;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace EmailParserHelperTests
 {
-    public class UnitTest1
+    public class GeneralTests
     {
         [Fact]
         public void parseEtsyEmail()
@@ -15,7 +16,7 @@ namespace EmailParserHelperTests
 
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
-            Assert.Equal(8, sut.Transactions.Count);
+            Assert.Equal(9, sut.Transactions.Count);
 
             var mystring = sut.LongDescription;
         }
@@ -24,7 +25,7 @@ namespace EmailParserHelperTests
         [Fact]
         public void ParseShopifyEmail()
         {
-                        
+
             var sut = new ShopifyOrder(shopifyEmail);
             Assert.Equal("1130", sut.OrderID);
             Assert.Equal(114.05, sut.OrderTotal);
@@ -37,8 +38,8 @@ namespace EmailParserHelperTests
         [Fact]
         public void CompleteOrder()
         {
-            var test = new Automation(true);
-            test.CompleteOrder("1663955060", "1.25");
+            var test = new Automation();
+            test.CompleteOrder("1666794606", "3.52");
         }
 
 
@@ -47,7 +48,7 @@ namespace EmailParserHelperTests
         {
             var inventoryBase = new AirtableItemLookup();
 
-            var test = new Automation(true);
+            var test = new Automation();
             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             var previousQuantity = component.Quantity;
             var previousPending = component.Pending;
@@ -56,7 +57,7 @@ namespace EmailParserHelperTests
             Assert.True(component.Pending - previousPending == 3);
             previousPending = component.Pending;
 
-            test.GenerateInventoryRequest(component);
+    //        test.GenerateInventoryRequest(component);
             Assert.Equal(component.Quantity, previousQuantity);
             Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
         }
@@ -194,7 +195,7 @@ Item price:         $68.00
 
 Transaction ID:     1921038848
 Item:               3D Printed UT Tower Model | Austin Skyline Downtown Building
-Height: 6 Inches
+Height: 8 Inches
 Base Option: No Base
 Quantity:           1
 Item price:         $28.00
@@ -377,11 +378,24 @@ Etsy
             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             var previousQuantity = component.Quantity;
             var previousPending = component.Pending;
-            test.CompleteInventoryRequest(component, 3, 5);
+            test.CompleteInventoryRequest("ZZZ - Dummy", 3, 5);
             inventoryBase.UpdateComponentRecord(component);
             Assert.True(component.Quantity - previousQuantity == 3);
             Assert.True(component.Pending - previousPending == -5);
         }
 
+
+    }
+    public class ParserTests
+    {
+        [Fact]
+        public void CompleteInventoryRequestOrder_ParserMethod()
+        {
+            var log = new List<string>();
+            ParserMethods.CreateManualInventoryOrder("ZZZ - Dummy", 10);
+            var fields = new NameValueCollection();
+            fields.Add("Task Name", "(10/20) ZZZ - Dummy");
+            ParserMethods.CompleteInventoryRequestOrder(fields, ref log, true);
+        }
     }
 }

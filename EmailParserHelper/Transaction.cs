@@ -69,8 +69,12 @@ namespace EmailParserHelper
         public string CleanedItemName {
             get
             {
-                var itemNamePattern = @"\s*(?:3D Printed)?([^|\n]*)\s*[-|\n]?";
-                return getMatchingString(Regex.Match(ItemName, itemNamePattern, RegexOptions.IgnoreCase));
+                if (string.IsNullOrEmpty(ProductData?.DisplayName))
+                {
+                    var itemNamePattern = @"\s*(?:3D Printed)?([^|\n]*)\s*[-|\n]?";
+                    return getMatchingString(Regex.Match(ItemName, itemNamePattern, RegexOptions.IgnoreCase));
+                }
+                return ProductData?.DisplayName;
             }
         }
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();

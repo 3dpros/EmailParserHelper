@@ -56,6 +56,37 @@ namespace EmailParserHelper
             return false;
         }
 
+        public static bool CompleteInventoryRequestOrder(NameValueCollection fields, ref List<string> log, bool dryRun)
+        {
+            var automation = new Automation(dryRun);
+            try
+            {
+                automation.CompleteInventoryRequest(fields["Task Name"]);
+                if (!string.IsNullOrEmpty(fields["Task ID"]))
+                {
+                    automation.UpdateCompletedInventoryRequestOrderAsana(fields["Task ID"], fields["Owner"]);
+                }
+                else if (!string.IsNullOrEmpty(fields["Order ID"]))
+                {
+                    automation.UpdateCompletedInventoryRequestOrderAirtable(fields["Order ID"], fields["Owner"]);
+                }
+                else
+                {
+                    log.Add("no identifier found in fields, cannot update order record");
+                }
+                log = automation.Log;
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                log = automation.Log;
+                log.Add(e.Message);
+            }
+
+            return false;
+        }
+
         public static bool CreateManualInventoryOrder(string componentName, int quantity)
         {
             var inventoryBase = new AirtableItemLookup();
