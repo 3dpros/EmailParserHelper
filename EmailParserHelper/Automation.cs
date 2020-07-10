@@ -15,9 +15,12 @@ using AsanaNet;
 //using AirtableApiClient;
 namespace EmailParserHelper
 {
+
     public class Automation
     {
         private const string HighPriorityProjectName = "AHigh Priority";
+        readonly string defaultShipper = "Leah Perkuhn";
+
 
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
         private AirtableOrders ATbase;
@@ -36,8 +39,9 @@ namespace EmailParserHelper
             ATbase = new AirtableOrders(testing);
         }
 
-        public bool ProcessOrder(string emailBody, string channel, out Order orderData)
+        public bool ProcessOrder(string emailBody, string emailHTML, string channel, out Order orderData, out OrderTrackingData orderTracking)
         {
+            orderTracking = null;
             Log.Add("Starting Airtable Entry (v2)");
             var channelKey = channel.ToLower();
             bool UseSKUsForItemLookup;
@@ -50,7 +54,7 @@ namespace EmailParserHelper
             }
             else if (channelKey == "etsy")
             {
-                orderData = new EmailParserHelper.EtsyOrder(emailBody);
+                orderData = new EmailParserHelper.EtsyOrder(emailBody, emailHTML);
                 UseSKUsForItemLookup = false;
             }
             else
@@ -96,17 +100,22 @@ namespace EmailParserHelper
                     {
                         currentProductData = inventoryBase.FindItemRecord(transaction.ItemName, transaction.Color, transaction.SizeInInches);
                     }
-                    if(transaction.ProductData != currentProductData)
+                    if(transaction.ProductData?.UniqueName != currentProductData?.UniqueName)
                     {
-                        Log.Add("ASSERT: order productdata does not match addOrder productData: " + transaction.ItemName + ", transaction data: " + currentProductData?.ItemName);
+                        Log.Add("ASSERT: order productdata does not match addOrder productData: " + transaction.ProductData?.UniqueName + ", transaction data: " + currentProductData?.UniqueName);
                     }
                     if (currentProductData == null)
                     {
                         //if any item in the order is custom, the whole order is custom
                         hasCustomComponents = true;
                         currentTransactionType = TransactionTypes.UntrackedCustom;
-                        inventoryBase.AddProductRecord(transaction.CleanedItemName, transaction.Color, transaction.SizeInInches);
-                        Log.Add($"Found Untracked Custom Item: {transaction.CleanedItemName} {transaction.Color} {transaction.SizeInInches}. Adding it to catalog.");
+                        //only add to the catelog for etsy orders since shopify orders dont have size or color info
+                        if (channelKey == "etsy")
+                        {
+                            currentProductData = inventoryBase.AddProductRecord(transaction.CleanedItemName, transaction.Color, transaction.SizeInInches);
+                            transaction.ProductData = currentProductData;
+                            Log.Add($"Found Untracked Custom Item: {transaction.CleanedItemName} {transaction.Color} {transaction.SizeInInches}. Adding it to catalog.");
+                        }
                     }
                     else
                     {
@@ -154,6 +163,13 @@ namespace EmailParserHelper
                         Record = currentProductData,
                         TransactionType = currentTransactionType
                     });
+                }
+
+                //if the order has only one product, update the product DB with the image
+                if(orderData.Transactions.Count == 1 && !string.IsNullOrEmpty(orderData.ImageURL))
+                {
+                    Log.Add("updating product image URL" + orderData.ImageURL);
+                    inventoryBase.AddImageToProduct(orderData.Transactions[0].ProductData, orderData.ImageURL);
                 }
 
                 // determine the list of potential printers for the order. this is ther intersection of the potential printers 
@@ -226,19 +242,14 @@ namespace EmailParserHelper
                 airtableOrder.Description = orderData.ShortDescription;
                 airtableOrder.Channel = channel;
                 airtableOrder.DueDate = orderData.DueDate;
-                airtableOrder.Rush = (airtableOrder.ShippingCharge > 0 && airtableOrder.ShippingCharge < 12);
+                airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 12);
                 airtableOrder.SalesTax = orderData.SalesTax;
                 airtableOrder.CustomerEmail = orderData.Customer.Email;
                 airtableOrder.OrderURL = orderData.OrderUrl;
+                airtableOrder.Shipper = defaultShipper;
 
-                var startingOrderStage = "Assigned";
-                if (!hasCustomComponents && hasInventoryComponents)
-                {
-                    projects.Add("Shipper");
-                    airtableOrder.Shipper = "Leah";
-                    startingOrderStage = "Ship";
-                    owner = "Zapier";
-                }
+                var startingOrderStage = "Assigned"; 
+
                 if (hasCustomComponents && hasInventoryComponents)
                 {
                     projects.Add("Mixed Order");
@@ -258,32 +269,39 @@ namespace EmailParserHelper
                     }
                     airtableOrder.Notes += "\r\n\r\n" + string.Join("\r\n", inventoryPackingList.ToArray()) + "\r\n\r\n" + string.Join("\r\n", customPackingList.ToArray());
                 }
+
+                //order is completely inventory products
+                if (!hasCustomComponents && hasInventoryComponents)
+                {
+                    Log.Add("full inventory order");
+                    projects.Add("Shipper");
+                    airtableOrder.Shipper = defaultShipper;
+                    startingOrderStage = "Ship";
+                    airtableOrder.PrintOperator = "Inventory";
+                }
+                else if (!string.IsNullOrEmpty(owner))
+                {
+                    Log.Add("assigning to owner: " + owner);
+                    airtableOrder.PrintOperator = owner;
+                    startingOrderStage = "Assigned";
+                }
                 if (airtableOrder.Rush)
                 {
                     projects.Add(HighPriorityProjectName);
                     airtableOrder.Description = "[Priority]" + airtableOrder.Description;
                 }
-                Log.Add("assigning to owner: " + owner);
-                airtableOrder.PrintOperator = owner;
 
-
-                var asanaTask = Asana.AddTask(orderData.OneLineDescription, $"{airtableOrder.OrderURL}\r\n{airtableOrder.Notes}", dryRun?(new List<string>() { productOrdersBoardName }):projects, airtableOrder.DueDate, owner);
+                var asanaTask = Asana.AddTask("[Legacy]" + orderData.OneLineDescription, $"{airtableOrder.OrderURL}\r\n{airtableOrder.Notes}", dryRun?(new List<string>() { productOrdersBoardName }):projects, airtableOrder.DueDate, airtableOrder.PrintOperator);
                 airtableOrder.AsanaTaskID = asanaTask.ID.ToString();
 
                 ATbase.CreateOrderRecord(airtableOrder);
-                var orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
+                orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
                 orderTracking.IncludedItems = (from record in transactionRecords
                                                select record?.Record?.UniqueName)?.ToList();
-                orderTracking.Description = orderData.ShortDescription;
                 orderTracking.OrderURL = orderData.OrderUrlMarkdown;
                 orderTracking.DesignerURL = DesignerURL;
-                if(!string.IsNullOrEmpty(owner))
-                {
-                    orderTracking.Stage = startingOrderStage;
-
-                }
+                orderTracking.Stage = startingOrderStage;
                 ATTrackingBase.CreateOrderRecord(orderTracking);
-
             }
             else
             {
@@ -309,30 +327,35 @@ namespace EmailParserHelper
             {
                 Log.Add("Record Exists");
 
-                var asanaID = airtableOrderRecord.AsanaTaskID;
+               // var asanaID = airtableOrderRecord.AsanaTaskID;
                 if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord.ShipDate.Year < 2010))
                 {
                     Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
-                    return true;
+                    if (airtableOrderRecord.Channel.ToLower() == "etsy")
+                    {
+                        throw new Exception("Order shipped more than once: " + airtableOrderRecord?.OrderID);
+                    }
                 }
-                if (asanaID != "")
+               // if (asanaID != "")
                 {
-                    Log.Add("Checking Asana ID " + asanaID);
-                    AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
+                    //Log.Add("Checking Asana ID " + asanaID);
 
+                    //AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
                     var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
 
-                    Log.Add("Found Asana Task For " + asanaID);
-                    if (currentTask.Assignee != null)
+                    //Log.Add("Found Asana Task For " + asanaID);
+                    //  if (currentTask.Assignee != null)
+                    if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
-                        if (currentTask.Assignee != null)
+                        //if (currentTask.Assignee != null)
+                        
                         {
-                            airtableOrderRecord.PrintOperator = currentTask.Assignee.Name;
+                            airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             //airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
                         }
 
-                        airtableOrderRecord.Shipper = GetShipperName(currentTask, currentTask.Assignee.Name);
+                        airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;//GetShipperName(currentTask, currentTask.Assignee.Name);
                         //airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
@@ -351,7 +374,7 @@ namespace EmailParserHelper
 
                         if (!dryRun)
                         {
-                            currentTask.Delete();
+                            //currentTask.Delete();
                         }
                         if (orderTrackingRecord != null)
                         {
@@ -363,11 +386,11 @@ namespace EmailParserHelper
                         Log.Add("No owner assigned for " + orderID.ToString());
                     }
                 }
-                else
-                {
-                    Log.Add("Blank asana ID");
-                    return true;
-                }
+                //else
+                //{
+                //    Log.Add("Blank asana ID");
+                //    return true;
+                //}
             }
             else
             {
@@ -377,28 +400,6 @@ namespace EmailParserHelper
             return true;
         }
 
-        private static string GetShipperName(AsanaTask currentTask, string printOperator)
-        {
-            var shipperNameMap = new Dictionary<string, string>()
-        {
-            {"Shipper", "Leah"}
-        };
-
-            var projectNames = new List<string>();
-            foreach (var project in currentTask.Projects)
-            {
-                projectNames.Add(project.Name);
-            }
-
-            foreach (var item in shipperNameMap)
-            {
-                if (projectNames.Contains(item.Key))
-                {
-                    return item.Value;
-                }
-            }
-            return printOperator;
-        }
         public void CompleteInventoryRequest(string TaskName)
         {
             var matches = Regex.Match(TaskName, @"\((\d*)\/(\d*)\)\s*(.*)").Groups;
@@ -506,7 +507,9 @@ namespace EmailParserHelper
 
                 inventoryBase.GetPotentialPrintersList(component, out printerNames, out preferredInvPrinter);
                 var inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
-                inventoryOrder.Notes = "available quantity when this card was created: " + component.Quantity.ToString() +
+                inventoryOrder.Notes = 
+                    "component ID: " + component.id + 
+                    "\navailable quantity when this card was created: " + component.Quantity.ToString() +
                     "\nnumber pending when card was created: " + pendingBeforeStart + "->" + component.Pending +
                     "\n" + component.Details +
                     "\n" + inventoryOrderPrintersString+
@@ -515,25 +518,30 @@ namespace EmailParserHelper
                 var orderProjects = new List<string>() { etsyOrdersBoardName, "Inventory Requests" };
                 if( component.IsExternal)
                 {
-                        orderProjects.Add("Parts Order Requests");
+                    orderProjects.Add("Parts Order Requests");
                 }
                 // mark as high priority if we don't have many in stock
-                if ((component.Quantity + i * quantityPerBatch) < (component.MinimumStock) / 3)
+                if ((component.Quantity + pendingBeforeStart) < (component.MinimumStock) / 3)
                 {
                     orderProjects.Add(HighPriorityProjectName);
                     inventoryOrder.Rush = true;
                 }
                 inventoryOrder.PrintOperator = inventoryOrderOwner;
+
+
+                var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);
+                inventoryOrderTrackingData.IsInventoryRequest = true;
+                inventoryOrderTrackingData.IncludedComponentId = component.id;
+                if (!string.IsNullOrEmpty(inventoryOrder.PrintOperator))
+                {
+                    inventoryOrderTrackingData.Stage = "Assigned";
+                }
+                ATbase.CreateOrderRecord(inventoryOrder);
+                ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
                 var invAsanaTask = Asana.AddTask(cardName, inventoryOrder.Notes, orderProjects, inventoryOrder.DueDate, inventoryOrderOwner);
                 Log.Add("added task to asana" + cardName);
 
                 inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
-
-                ATbase.CreateOrderRecord(inventoryOrder);
-                var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);
-                inventoryOrderTrackingData.IsInventoryRequest = true;
-
-                ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
             }
 
         }

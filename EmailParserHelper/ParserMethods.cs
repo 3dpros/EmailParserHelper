@@ -20,9 +20,9 @@ namespace EmailParserHelper
 
             try
             {
-                Order OrderData;
-                var result = automation.ProcessOrder(fields["body"], fields["Channel"], out OrderData);
-                fields.Add("NotificationEmailSubject", (dryRun ? "(TEST)" : "") + "[" + (OrderData.OrderTotal - OrderData.ShippingCharge).ToString("C") + "]" + OrderData.OneLineDescription);
+                var result = automation.ProcessOrder(fields["Body"], fields["BodyHTML"], fields["Channel"], out var OrderData, out var orderTracking);
+                var operatorString = string.IsNullOrEmpty(orderTracking?.PrintOperator) ? "":"(" + orderTracking.PrintOperator.Split(' ')[0] + ")";
+                fields.Add("NotificationEmailSubject", (dryRun ? "(TEST)" : "") + "[" + (OrderData.OrderTotal - OrderData.ShippingCharge).ToString("C") + "]"+ operatorString + " " + OrderData.OneLineDescription);
                 log = automation.Log;
                 return result;
             }
@@ -31,7 +31,6 @@ namespace EmailParserHelper
                 log = automation.Log;
                 log.Add(e.Message);
                 log.Add(e.StackTrace);
-                log.Add(e.ToString());
             }
             return false;
 
@@ -50,7 +49,8 @@ namespace EmailParserHelper
             catch (Exception e)
             {
                 log = automation.Log;
-                log.Add(e.Message);
+                log.Add(e.InnerException.Message);
+                log.Add(e.StackTrace);
             }
 
             return false;

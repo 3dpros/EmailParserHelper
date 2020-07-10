@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -7,7 +8,9 @@ namespace EmailParserHelper
 {
     public class EtsyOrder : Order
     {
-        public EtsyOrder(string plainTextEtsyOrderEmail) : base(plainTextEtsyOrderEmail)
+        static int EtsyMinimumProcessingDays = 4;
+
+        public EtsyOrder(string plainTextEtsyOrderEmail, string HTMLOrderEmail) : base(plainTextEtsyOrderEmail)
         {
             string orderRegex = "Transaction ID(.|\\r|\\n)*?price:.*";
 
@@ -31,7 +34,15 @@ namespace EmailParserHelper
             Customer.Username = MatchRegex(@"Note from\s*([^\n\r]*)?",1);
             OrderTotal = MatchNumber(@"Order Total\:\s*\$\s*([^\n\r]*)?",1);
             ShippingCharge = MatchNumber(@"Shipping\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
+            ImageURL = Regex.Match(HTMLOrderEmail, @"(https:\/\/i.etsystatic.com\/.*)\""")?.Groups[1]?.Value;
 
+            var transactionsProcessingTimeList = (from txn in Transactions
+                                             where txn.ProductData != null
+                                             select txn.ProductData.ProcessingTime).ToList();
+            if (transactionsProcessingTimeList.Count > 0)
+            {
+                ProcessingTimeInDays = Math.Max(transactionsProcessingTimeList.Max(), EtsyMinimumProcessingDays);
+            }
         }
 
 

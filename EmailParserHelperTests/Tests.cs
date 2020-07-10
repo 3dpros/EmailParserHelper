@@ -12,7 +12,7 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var sut = new EtsyOrder(etsyEmail);
+            var sut = new EtsyOrder(etsyEmail, "");
 
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
@@ -36,10 +36,13 @@ namespace EmailParserHelperTests
         }
 
         [Fact]
-        public void CompleteOrder()
+        public void ShipOrder()
         {
-            var test = new Automation();
-            test.CompleteOrder("1666794606", "3.52");
+            var test = new Automation(true);
+            Order order;
+          //  test.ProcessOrder(etsyEmail, "Etsy", out order);
+
+            test.CompleteOrder("1676111111", "3.52");
         }
 
 
@@ -153,18 +156,18 @@ Quantity:           4
 Item price:         $34.00
 
 Transaction ID:     1738603324
-Item:               Weight Plate Wall Art | Customizable 3D printed gym sign or wall sign for crossfit box
+Item:               New Item | Customizable 3D printed gym sign or wall sign for crossfit box
 Color: Black
 Size/Options: 11&quot; + Custom Text
 Quantity:           1
 Item price:         $48.00
 
-Transaction ID:     1759746348
-Item:               Weight Plate Clock | Customizable 3D printed gift for workout room, gym clock for crossfit
+
+Transaction ID:     1962639347
+Item:               Weight Plate Clock | 3D printed  fitness gift for workout room, gym clock for crossfit
 Size: 15&quot;
-Options: Custom Text
 Quantity:           1
-Item price:         $72.00
+Item price:         $58.00
 
 Transaction ID:     1790457874
 Item:               Weight Plate Wall Art | Customizable 3D printed gym sign or wall sign for crossfit box
@@ -261,17 +264,17 @@ Hi Al Billington,
 
 We've finished processing your Etsy sale of one item.
 
-Your order number is 1676111371.
+Your order number is 1676111111.
 
 View the invoice: 
-http://www.etsy.com/your/orders/1676111371
+http://www.etsy.com/your/orders/1676111111
 
 ------------------------------------------------------
 Note from oye5rdfl:
 ------------------------------------------------------
 
-Top text in all caps: STELLAR
-Bottom text in all caps: FITNESS
+Top text in all caps: TEST
+Bottom text in all caps: ORDER
 Color: black
 Thank you!
 
@@ -287,7 +290,7 @@ Shop:               Al Billington
 Transaction ID:     1931393625
 Item:               Weight Plate Custom Text Clock | Customizable 3D printed gift for workout room, gym clock for crossfit
 Size: 11&quot;
-Personalization:  TopText=STELLAR|BottomText=FITNESS|color=black
+Personalization:  TopText=TEST|BottomText=ORDER|color=black
 Quantity:           1
 Item price:         $56.00
 
@@ -343,7 +346,7 @@ Etsy
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(etsyEmailDesignCode, "Etsy", out order);
+            test.ProcessOrder(etsyEmailDesignCode, "", "Etsy", out order, out _);
 
         }
         [Fact]
@@ -354,10 +357,9 @@ Etsy
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(etsyEmailDesignCode, "Etsy", out order);
+            test.ProcessOrder(etsyEmail, "", "Etsy", out order, out _);
 
         }
-
 
         [Fact]
         public void CreateShopifyOrder()
@@ -366,7 +368,7 @@ Etsy
 
             var test = new Automation(true);
             Order order;
-            test.ProcessOrder(shopifyEmail, "Shopify", out order);
+            test.ProcessOrder(shopifyEmail, "", "Shopify", out order, out _);
         }
 
         [Fact]
@@ -397,5 +399,6 @@ Etsy
             fields.Add("Task Name", "(10/20) ZZZ - Dummy");
             ParserMethods.CompleteInventoryRequestOrder(fields, ref log, true);
         }
+
     }
 }

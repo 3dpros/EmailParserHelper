@@ -66,6 +66,7 @@ namespace EmailParserHelper
             }
         }
         public string Notes { get; set; } = "";
+        public string ImageURL { get; set; } = "";
         public double OrderTotal { get; set; } = 0;
         public double ShippingCharge { get; set; } = 0;
 

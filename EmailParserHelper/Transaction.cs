@@ -130,7 +130,7 @@ namespace EmailParserHelper
                 }
                 return _productData;
             }
-            private set
+            set
             {
                 _productData = value;
             }
