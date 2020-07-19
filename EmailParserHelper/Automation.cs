@@ -8,9 +8,7 @@ using System.Net.Mail;
 using System.Collections.Specialized;
 //using EmailParserBackend.ScriptingInterface;
 using AirtableClientWrapper;
-using AsanaAPI;
 using System.Text.RegularExpressions;
-using AsanaNet;
 //using AsanaNet;
 //using AirtableApiClient;
 namespace EmailParserHelper
@@ -28,13 +26,11 @@ namespace EmailParserHelper
 
         bool dryRun;
         private string etsyOrdersBoardName;
-        AsanaWrapper Asana;
         public List<string> Log = new List<string>();
 
         public Automation(bool testing = false)
         {
             etsyOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
-            Asana = new AsanaWrapper("0/7874fd8b3c16d982812217283e75c450", "3D Pros", etsyOrdersBoardName);
             dryRun = testing;
             ATbase = new AirtableOrders(testing);
         }
@@ -291,16 +287,14 @@ namespace EmailParserHelper
                     airtableOrder.Description = "[Priority]" + airtableOrder.Description;
                 }
 
-                var asanaTask = Asana.AddTask("[Legacy]" + orderData.OneLineDescription, $"{airtableOrder.OrderURL}\r\n{airtableOrder.Notes}", dryRun?(new List<string>() { productOrdersBoardName }):projects, airtableOrder.DueDate, airtableOrder.PrintOperator);
-                airtableOrder.AsanaTaskID = asanaTask.ID.ToString();
-
-                ATbase.CreateOrderRecord(airtableOrder);
                 orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
                 orderTracking.IncludedItems = (from record in transactionRecords
                                                select record?.Record?.UniqueName)?.ToList();
                 orderTracking.OrderURL = orderData.OrderUrlMarkdown;
                 orderTracking.DesignerURL = DesignerURL;
                 orderTracking.Stage = startingOrderStage;
+
+                ATbase.CreateOrderRecord(airtableOrder);
                 ATTrackingBase.CreateOrderRecord(orderTracking);
             }
             else
@@ -538,10 +532,7 @@ namespace EmailParserHelper
                 }
                 ATbase.CreateOrderRecord(inventoryOrder);
                 ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
-                var invAsanaTask = Asana.AddTask(cardName, inventoryOrder.Notes, orderProjects, inventoryOrder.DueDate, inventoryOrderOwner);
-                Log.Add("added task to asana" + cardName);
-
-                inventoryOrder.AsanaTaskID = invAsanaTask.ID.ToString();
+                Log.Add("added task to order tracking" + cardName);
             }
 
         }

@@ -16,12 +16,6 @@
     <Reference Include="AirtableClientWrapper">
       <HintPath>..\..\OrderAutomation\AirtableClientWrapper\bin\Release\AirtableClientWrapper.dll</HintPath>
     </Reference>
-    <Reference Include="AsanaNet">
-      <HintPath>..\..\..\..\..\..\EmailParser\Asana\AsanaNet.dll</HintPath>
-    </Reference>
-    <Reference Include="AsanaWrapper">
-      <HintPath>..\..\..\..\..\..\EmailParser\Asana\AsanaWrapper.dll</HintPath>
-    </Reference>
     <Reference Include="System.Web" />
   </ItemGroup>
 
