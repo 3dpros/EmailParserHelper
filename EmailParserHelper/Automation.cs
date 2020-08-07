@@ -9,6 +9,7 @@ using System.Collections.Specialized;
 //using EmailParserBackend.ScriptingInterface;
 using AirtableClientWrapper;
 using System.Text.RegularExpressions;
+using EmailParserHelper.Expenses;
 //using AsanaNet;
 //using AirtableApiClient;
 namespace EmailParserHelper
@@ -18,6 +19,7 @@ namespace EmailParserHelper
     {
         private const string HighPriorityProjectName = "AHigh Priority";
         readonly string defaultShipper = "Leah Perkuhn";
+        readonly string altShipper = "James English";
 
 
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
@@ -287,6 +289,7 @@ namespace EmailParserHelper
                     airtableOrder.Description = "[Priority]" + airtableOrder.Description;
                 }
 
+
                 orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
                 orderTracking.IncludedItems = (from record in transactionRecords
                                                select record?.Record?.UniqueName)?.ToList();
@@ -342,14 +345,21 @@ namespace EmailParserHelper
                     if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
                         //if (currentTask.Assignee != null)
-                        
+
                         {
                             airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             //airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
                         }
+                        if (orderTrackingRecord.Stage == "Alt Ship")
+                        {
 
-                        airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;//GetShipperName(currentTask, currentTask.Assignee.Name);
+                            airtableOrderRecord.Shipper = altShipper;
+                        }
+                        else
+                        {
+                            airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;//GetShipperName(currentTask, currentTask.Assignee.Name);
+                        }                   
                         //airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
@@ -408,20 +418,6 @@ namespace EmailParserHelper
 
             inventoryBase.UpdateComponentQuantity(component, quantityCompleted, quantityRequested);
         }
-        public void UpdateCompletedInventoryRequestOrderAsana(string asanaTaskID, string printOperator)
-        {
-            Log.Add("Checking Order for Asana Task" + asanaTaskID);
-            var order = ATbase.GetRecordByField("Asana Task ID", asanaTaskID, out _);
-            if (order != null)
-            {
-                UpdateCompletedInventoryRequestOrder(order, printOperator);
-            }
-            else
-            {
-                throw new Exception("Order entry was not found in airtable for the specified Asana Task: " + asanaTaskID);
-            }
-
-        }
 
         public void UpdateCompletedInventoryRequestOrderAirtable(string orderID, string printOperator)
         {
@@ -465,6 +461,59 @@ namespace EmailParserHelper
 
         }
 
+        public void ProcessExpense(List<string> log, NameValueCollection fields)
+        {
+            var ATbase = new AirtableExpenses();
+
+            if (fields["Type"] == "amazon")
+            {
+                var amazonExpenseEntry = new AmazonExpenseEntry(fields["Body"]);
+                if (amazonExpenseEntry.isTotalValid())
+                {
+                    foreach (var expenseEntry in amazonExpenseEntry.expenseEntries)
+                    {
+                        var airtableExpensesEntry = new ExpensesData(expenseEntry.Name);
+                        airtableExpensesEntry.Date = DateTime.Now;
+                        airtableExpensesEntry.DeliveredTo = amazonExpenseEntry.ReceiverName;
+                        airtableExpensesEntry.Value = expenseEntry.CostForAllItems;
+                        airtableExpensesEntry.Quantity = expenseEntry.Quantity;
+
+                        ATbase.CreateExpensesRecord(airtableExpensesEntry);
+                    }
+                }
+                else
+                {
+                    var msg = "Amazon expense total does not match sum of entries";
+                    log.Add(msg);
+                    throw new Exception(msg);
+                }
+            }
+            else //wells transactions are parsed in emailParser for now
+            {
+                var airtableExpensesEntry = new ExpensesData(fields["Name"]);
+                airtableExpensesEntry.Date = DateTime.Now;
+                airtableExpensesEntry.DeliveredTo = fields["Delivered To"];
+                airtableExpensesEntry.Value = Double.Parse(fields["Order Total"]);
+
+                ATbase.CreateExpensesRecord(airtableExpensesEntry);
+            }
+        }
+        public void ProcessRefund(List<string> log, string orderID, double amountRefunded)
+        {
+            var order = ATbase.GetRecordByOrderID(orderID, out _);
+            if (order != null)
+            {
+                order.AmountRefunded = amountRefunded;
+                ATbase.CreateOrderRecord(order, true);
+            }
+            else
+            {
+                throw new Exception("order to refund not found");
+            }
+        }
+
+
+
         /// <summary>
         /// generate an inventory request using quantity determined by the component metadata
         /// </summary>
@@ -503,29 +552,21 @@ namespace EmailParserHelper
                 var inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
                 inventoryOrder.Notes = 
                     "component ID: " + component.id + 
-                    "\navailable quantity when this card was created: " + component.Quantity.ToString() +
-                    "\nnumber pending when card was created: " + pendingBeforeStart + "->" + component.Pending +
                     "\n" + component.Details +
                     "\n" + inventoryOrderPrintersString+
                     "\n\n" + noteAddendum;
 
-                var orderProjects = new List<string>() { etsyOrdersBoardName, "Inventory Requests" };
-                if( component.IsExternal)
-                {
-                    orderProjects.Add("Parts Order Requests");
-                }
                 // mark as high priority if we don't have many in stock
                 if ((component.Quantity + pendingBeforeStart) < (component.MinimumStock) / 3)
                 {
-                    orderProjects.Add(HighPriorityProjectName);
                     inventoryOrder.Rush = true;
                 }
                 inventoryOrder.PrintOperator = inventoryOrderOwner;
 
-
                 var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);
                 inventoryOrderTrackingData.IsInventoryRequest = true;
                 inventoryOrderTrackingData.IncludedComponentId = component.id;
+                inventoryOrderTrackingData.RequestedQuantity = quantityPerBatch;
                 if (!string.IsNullOrEmpty(inventoryOrder.PrintOperator))
                 {
                     inventoryOrderTrackingData.Stage = "Assigned";
@@ -557,6 +598,8 @@ namespace EmailParserHelper
             }              
             return PrintersString;            
         }
+
+
     }
 
     public enum TransactionTypes

@@ -4,6 +4,7 @@ using EmailParserHelper;
 using AirtableClientWrapper;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using EmailParserHelper.Expenses;
 
 namespace EmailParserHelperTests
 {
@@ -42,7 +43,7 @@ namespace EmailParserHelperTests
             Order order;
           //  test.ProcessOrder(etsyEmail, "Etsy", out order);
 
-            test.CompleteOrder("1676111111", "3.52");
+            test.CompleteOrder("1696585177", "3.52");
         }
 
 
@@ -384,6 +385,104 @@ Etsy
             inventoryBase.UpdateComponentRecord(component);
             Assert.True(component.Quantity - previousQuantity == 3);
             Assert.True(component.Pending - previousPending == -5);
+        }
+
+        string amazonExpenseEmail = @"Amazon.com Order Confirmation
+Order #113-6518903-2379445
+www.amazon.com/ref= TE_tex_h
+_______________________________________________________________________________________
+
+Hello 3DPros LLC,
+
+Thank you for shopping with us.We’ll send a confirmation once your items have shipped.
+
+Your order details are indicated below. The payment details of your transaction can be found at:
+https://www.amazon.com/gp/css/summary/print.html/ref=TE_oi?ie=UTF8&orderID=113-6518903-2379445
+
+If you would like to view the status of your order or make any changes to it, please visit Your Orders on Amazon.com at:
+https://www.amazon.com/gp/css/your-orders-access/ref=TE_gs
+
+
+This order is placed on behalf of 3DPros.
+     Your guaranteed delivery date is:
+               Friday, August 7
+
+
+
+     Your shipping speed:
+               Two-Day Shipping
+
+     Your order will be sent to:
+               Kyle Perkuhn
+               AUSTIN, TX
+               United States
+=======================================================================================
+
+Order Details
+Order #113-6518903-2379445
+Placed on today, July 31
+
+               Aviditi M844 Corrugated Mailer, 8 Length x 4 Width x 4 Height, Oyster White (Bundle of 50)
+               $33.47
+
+               Sold by: Amazon.com Services LLC
+
+               Condition: New
+
+               Aviditi Crush Proof Corrugated Mailer, , Oyster White, Bundle of 50 (M642)
+               $22.37
+
+               Sold by: Amazon.com Services LLC
+
+               Condition: New
+
+               10 x Mintso Wood LED Light Dispaly Base for Laser Crystal Glass Art,4 Inch,Warm Light (B)
+               $12.68
+
+               Sold by: Amazon.com Services LLC
+
+               Condition: New
+
+_______________________________________________________________________________________
+
+
+              Item Subtotal: $182.64
+
+              Shipping & Handling: $0.00
+
+              Total Before Tax: $182.64
+              Estimated Tax: $0.00
+
+
+              Order Total: $55.84
+
+
+=======================================================================================
+
+To learn more about ordering, go to Ordering from Amazon.com at:
+www.amazon.com/gp/help/customer/display.html/ref=TE_tex_ofa?nodeId=468466
+
+If you want more information or need more assistance, go to Help at:
+www.amazon.com/gp/help/customer/display.html/ref=TE_tex_ss?ie=UTF8&nodeId=508510
+
+Thank you for shopping with us.
+Amazon.com
+www.amazon.com/ref=TE_tex_ty
+_______________________________________________________________________________________
+
+The payment for your invoice is processed by Amazon Payments, Inc. P.O. Box 81226 Seattle, Washington 98108-1226. If you need more information, please contact (866) 216-1075
+
+Unless otherwise noted, items sold by Amazon.com are subject to sales tax in select states in accordance with the applicable laws of that state. If your order contains one or more items from a seller other than Amazon.com, it may be subject to state and local sales tax, depending upon the seller's business policies and the location of their operations. Learn more about tax and seller information at:
+https://www.amazon.com/gp/help/customer/display.html/ref=hp_bc_nav?ie=UTF8&nodeId=202029700
+
+This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.
+
+    ";
+        [Fact]
+        public void  AddAmazonExpense()
+        {
+            var expense = new AmazonExpenseEntry(amazonExpenseEmail);
+            Assert.True(expense.isTotalValid());
         }
 
 

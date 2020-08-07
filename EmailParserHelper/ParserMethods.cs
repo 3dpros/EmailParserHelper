@@ -94,6 +94,24 @@ namespace EmailParserHelper
             return false;
         }
 
+        public static bool ProcessExpense(ref List<string> log, NameValueCollection fields)
+        {
+            var auto = new Automation();
+            auto.ProcessExpense(log, fields);
+            return true;
+        }
+
+        public static bool ProcessRefund(ref List<string> log, NameValueCollection fields)
+        {
+            var auto = new Automation();
+            double amount;
+            double.TryParse(fields["Refund Amount"], out amount);
+            var orderID = fields["Order ID"];
+            auto.ProcessRefund(log, orderID, amount);
+            log.Add($"refunded order {orderID} for {amount}");
+            return true;
+        }
+
     }
 
 }

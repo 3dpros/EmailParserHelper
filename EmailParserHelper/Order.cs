@@ -93,13 +93,7 @@ namespace EmailParserHelper
 
         protected string MatchRegex(string pattern, int group = 0)
         {
-            var result = Regex.Match(EmailBody, pattern, RegexOptions.Singleline)?.Groups[group]?.Value;
-            if (string.IsNullOrEmpty(result))
-            {
-                return string.Empty;
-            }
-            else
-                return result;
+            return common.MatchRegex(EmailBody, pattern, group);
         }
 
         protected double MatchNumber(string pattern, int group = 0)
