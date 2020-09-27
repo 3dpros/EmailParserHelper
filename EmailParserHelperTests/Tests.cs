@@ -13,7 +13,7 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var sut = new EtsyOrder(etsyEmail, "");
+            var sut = new EtsyOrder(etsyEmailDummy, "");
 
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
@@ -61,7 +61,8 @@ namespace EmailParserHelperTests
             Assert.True(component.Pending - previousPending == 3);
             previousPending = component.Pending;
 
-    //        test.GenerateInventoryRequest(component);
+                    test.GenerateInventoryRequest(component);
+            component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             Assert.Equal(component.Quantity, previousQuantity);
             Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
         }
@@ -339,6 +340,96 @@ please contact our support team: http://www.etsy.com/help/contact
 Thanks,
 Etsy
 ";
+        string etsyEmailDummy = @"------------------------------------------------------
+Your Etsy Order
+------------------------------------------------------
+
+Hi Al Billington,
+
+We've finished processing your Etsy sale of 2 items.
+
+Your order number is 1518764111.
+
+View the invoice: 
+http://www.etsy.com/your/orders/1518764111
+
+------------------------------------------------------
+Note from phillip.adler6@gmail.com:
+------------------------------------------------------
+
+The buyer did leave a notae.
+another line too.
+
+
+------------------------------------------------------
+Order Details
+------------------------------------------------------
+
+Shop:               Al Billington
+
+--------------------------------------
+
+Transaction ID:     1518764111
+Item:               zzz - dummy item
+Set Quantity: 3
+OtherOption: 32
+Quantity:           1
+Item price:         $12.34
+
+--------------------------------------
+Item total:         $90.00
+
+--------------------------------------
+Item total:         $125.00
+
+
+Applied discounts
+- CLITORISEARRINGSALE
+
+Discount:          -$3.90
+--------------------------------------
+Subtotal:           $121.10
+
+Shipping:           $2.00  ()
+Sales Tax:          $8.79
+--------------------------------------
+Order Total:        $129.89
+
+Shipping Address:
+<address >
+
+<span class='name'>phillip adler</span><br/><span class='first-line'>2725 se 32nd ave</span><br/><span class='city'>PORTLAND</span>, <span class='state'>OR</span> <span class='zip'>97202</span><br/><span class='country-name'>United States</span>
+<br/>
+
+
+<!-- Hidden Fields -->
+<input type=""hidden"" name=""country_code"" value=""209""/>
+
+< !--Address Verification-- >
+
+</ address >
+
+------------------------------------------------------
+Contacting the Buyer
+------------------------------------------------------
+
+*Send a message with Etsy's messaging system:
+http://www.etsy.com/conversations/new?with_id=247009438
+
+            Or
+
+            * Email phillip.adler6@gmail.com
+
+             ------------------------------------------------------
+
+If you have questions or were not involved in this transaction,
+please contact our support team: http://www.etsy.com/help/contact
+
+            Thanks,
+Etsy
+
+";
+
 
         [Fact]
         public void CreateEtsyOrderDesignCode()
@@ -356,9 +447,9 @@ Etsy
         {
             var inventoryBase = new AirtableItemLookup();
 
-            var test = new Automation(true);
+            var test = new Automation();
             Order order;
-            test.ProcessOrder(etsyEmail, "", "Etsy", out order, out _);
+            test.ProcessOrder(etsyEmailDummy, "", "Etsy", out order, out _);
 
         }
 
@@ -383,21 +474,24 @@ Etsy
             var previousPending = component.Pending;
             test.CompleteInventoryRequest("ZZZ - Dummy", 3, 5);
             inventoryBase.UpdateComponentRecord(component);
+
+            component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             Assert.True(component.Quantity - previousQuantity == 3);
             Assert.True(component.Pending - previousPending == -5);
         }
 
         string amazonExpenseEmail = @"Amazon.com Order Confirmation
-Order #113-6518903-2379445
-www.amazon.com/ref= TE_tex_h
+Amazon.com Order Confirmation
+Order #111-5913406-9986635
+www.amazon.com/ref=TE_tex_h
 _______________________________________________________________________________________
 
 Hello 3DPros LLC,
 
-Thank you for shopping with us.We’ll send a confirmation once your items have shipped.
+Thank you for shopping with us. We’ll send a confirmation once your items have shipped.
 
 Your order details are indicated below. The payment details of your transaction can be found at:
-https://www.amazon.com/gp/css/summary/print.html/ref=TE_oi?ie=UTF8&orderID=113-6518903-2379445
+https://www.amazon.com/gp/css/summary/print.html/ref=TE_oi?ie=UTF8&orderID=111-5913406-9986635
 
 If you would like to view the status of your order or make any changes to it, please visit Your Orders on Amazon.com at:
 https://www.amazon.com/gp/css/your-orders-access/ref=TE_gs
@@ -405,56 +499,45 @@ https://www.amazon.com/gp/css/your-orders-access/ref=TE_gs
 
 This order is placed on behalf of 3DPros.
      Your guaranteed delivery date is:
-               Friday, August 7
+               Friday, August 14
 
-
-
+                
      Your shipping speed:
-               Two-Day Shipping
+               One-Day Shipping
 
      Your order will be sent to:
-               Kyle Perkuhn
-               AUSTIN, TX
+               Al (3DPros)
+               PFLUGERVILLE, TX
                United States
 =======================================================================================
 
 Order Details
-Order #113-6518903-2379445
-Placed on today, July 31
+Order #111-5913406-9986635
+Placed on today, August 10
 
-               Aviditi M844 Corrugated Mailer, 8 Length x 4 Width x 4 Height, Oyster White (Bundle of 50)
-               $33.47
+               ROLLO Thermal Direct Shipping Label (Pack of 500 4x6 Fan-Fold Labels) - Commercial Grade
+               $19.99
 
-               Sold by: Amazon.com Services LLC
-
-               Condition: New
-
-               Aviditi Crush Proof Corrugated Mailer, , Oyster White, Bundle of 50 (M642)
-               $22.37
-
-               Sold by: Amazon.com Services LLC
+               Sold by: NELU Fulfillment
 
                Condition: New
 
-               10 x Mintso Wood LED Light Dispaly Base for Laser Crystal Glass Art,4 Inch,Warm Light (B)
-               $12.68
+               5 x HATCHBOX PLA 3D Printer Filament, Dimensional Accuracy +/- 0.03 mm, 1 kg Spool, 1.75 mm, Silver
+               $19.99
 
                Sold by: Amazon.com Services LLC
-
-               Condition: New
 
 _______________________________________________________________________________________
 
-
-              Item Subtotal: $182.64
+              Item Subtotal: $119.94
 
               Shipping & Handling: $0.00
 
-              Total Before Tax: $182.64
+              Total Before Tax: $119.94
               Estimated Tax: $0.00
 
 
-              Order Total: $55.84
+              Order Total: $119.94
 
 
 =======================================================================================
@@ -477,7 +560,7 @@ https://www.amazon.com/gp/help/customer/display.html/ref=hp_bc_nav?ie=UTF8&nodeI
 
 This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.
 
-    ";
+     ";
         [Fact]
         public void  AddAmazonExpense()
         {

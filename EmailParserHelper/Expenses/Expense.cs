@@ -18,6 +18,8 @@ namespace EmailParserHelper
                 return CostPerItem * Quantity;
             }
         }
+        public string orderID { set; get; }
+
     }
 
     public class ExpenseOrder
@@ -31,7 +33,6 @@ namespace EmailParserHelper
         public string ReceiverName { set; get; }
         public double NominalOrderTotal { set; get; }
 
-        public string orderID { set; get; }
         public bool isTotalValid()
         {
             double actualTotal = 0;
@@ -39,7 +40,7 @@ namespace EmailParserHelper
             {
                 actualTotal += expense.CostForAllItems;
             }
-            return (actualTotal == NominalOrderTotal);
+            return (Math.Abs(actualTotal - NominalOrderTotal) < .1);
         }
     }
 

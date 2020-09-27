@@ -13,18 +13,40 @@ namespace EmailParserHelper.Expenses
         {
             var expenseEntryRegex = @"(.*\r\n.*)\r\n*\s*Sold by";
             var matches = Regex.Matches(EmailBody, expenseEntryRegex);
+            var NominalOrderTotalMatches = Regex.Matches(EmailBody, @"Item Subtotal\:\s\$(\d*\.\d*)");
 
-            NominalOrderTotal = MatchNumber(@"Item Subtotal\:\s\$(\d*\.\d*)", 1);
+            var NominalOrderTotalMatchStrings = from Match item in NominalOrderTotalMatches
+                                                select item.Groups[1].Value;
+            foreach (var item in NominalOrderTotalMatchStrings)
+            {
+                double.TryParse(item, out var output);
+                NominalOrderTotal += output;
+            }
+
+
+           //     NominalOrderTotal = MatchNumber(@"Item Subtotal\:\s\$(\d*\.\d*)", 1);
             ReceiverName = MatchRegex(@"Your order will be sent to:\r\n([^\r\n]*)", 1).Trim();
-            orderID = MatchRegex(@"Order #([\d\-]*)", 1);
+            var orderIDmatches = Regex.Matches(EmailBody, @"Order #([\d\-]*)");
+
 
             var matchStrings = from Match item in matches
                                select item.Groups[1].Value;
+            var orderIDs = (from Match item in orderIDmatches
+                           select item.Groups[1].Value).Distinct().ToList();
+            int i = 0;
             foreach (var item in matchStrings)
             {
                 var expenseEntry = new ExpenseEntry();
-
-                var hasQuantityRegex = Regex.Match(item, @"(\d+)\sx\s(.*)");
+                if (i < orderIDs.Count)
+                {
+                    expenseEntry.orderID = orderIDs[i];
+                }
+                else
+                {
+                    expenseEntry.orderID = orderIDs.Last() + "-" + i.ToString();
+                }
+                ++i;
+                var hasQuantityRegex = Regex.Match(item.Trim(), @"^(\d+)\sx\s(.*)");
                 if (hasQuantityRegex.Success)
                 {
                     int quantity;

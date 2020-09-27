@@ -19,8 +19,8 @@ namespace EmailParserHelper
     {
         private const string HighPriorityProjectName = "AHigh Priority";
         readonly string defaultShipper = "Leah Perkuhn";
-        readonly string altShipper = "James English";
-
+        readonly string altShipper = "Daniel English";
+        readonly string warehouseManager = "Daniel English";
 
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
         private AirtableOrders ATbase;
@@ -62,7 +62,6 @@ namespace EmailParserHelper
 
             var productOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
             var orderID = orderData.OrderID;
-            //only create if it doesn't yet exist
             if (string.IsNullOrEmpty(orderID))
             {
                 var errorMsg = "Order already exists in airtable:" + orderData.OneLineDescription;
@@ -70,6 +69,7 @@ namespace EmailParserHelper
                 throw new System.Exception(errorMsg);
             }
             Log.Add("Checking Order ID: " + orderID);
+            //only create if it doesn't yet exist
             if (dryRun || ATbase.GetRecordByOrderID(orderID, out _) == null)
             {
                 Log.Add("Populating Order");
@@ -98,7 +98,7 @@ namespace EmailParserHelper
                     {
                         currentProductData = inventoryBase.FindItemRecord(transaction.ItemName, transaction.Color, transaction.SizeInInches);
                     }
-                    if(transaction.ProductData?.UniqueName != currentProductData?.UniqueName)
+                    if (transaction.ProductData?.UniqueName != currentProductData?.UniqueName)
                     {
                         Log.Add("ASSERT: order productdata does not match addOrder productData: " + transaction.ProductData?.UniqueName + ", transaction data: " + currentProductData?.UniqueName);
                     }
@@ -124,18 +124,18 @@ namespace EmailParserHelper
                             DesignerURL = currentProductData.BaseUrl;
                             // ditching this until asana API supports special characters
                             if (!string.IsNullOrEmpty(transaction.DesignerUrlFull))
-                             {
+                            {
                                 DesignerURL = transaction.DesignerUrlFull;
 
                             }
                             else
                             {
-                            //if the personalization isn't a design code, link the base designer page anyway for convenience   
-                            Log.Add("item has a designer: URL is " + DesignerURL);
+                                //if the personalization isn't a design code, link the base designer page anyway for convenience   
+                                Log.Add("item has a designer: URL is " + DesignerURL);
                             }
                         }
-                        if (currentProductData.IsInventory() 
-                            && !transaction.Custom 
+                        if (currentProductData.IsInventory()
+                            && !transaction.Custom
                             && transaction.Quantity < currentProductData.MaximumInventoryQuantity)
                         {
                             hasInventoryComponents = true;
@@ -164,7 +164,7 @@ namespace EmailParserHelper
                 }
 
                 //if the order has only one product, update the product DB with the image
-                if(orderData.Transactions.Count == 1 && !string.IsNullOrEmpty(orderData.ImageURL))
+                if (orderData.Transactions.Count == 1 && !string.IsNullOrEmpty(orderData.ImageURL))
                 {
                     Log.Add("updating product image URL" + orderData.ImageURL);
                     inventoryBase.AddImageToProduct(orderData.Transactions[0].ProductData, orderData.ImageURL);
@@ -217,12 +217,16 @@ namespace EmailParserHelper
                         else
                         {
                             // components = transactionRecord.Record.
-                        }                                
+                        }
                         foreach (InventoryComponent component in components)
                         {
                             if (component.IsBelowThreshhold())
                             {
                                 GenerateInventoryRequest(component);
+                            }
+                            if (component.Quantity < 0)
+                            {
+                                GenerateOutOfStockNotification(component);
                             }
                         }
                     }
@@ -231,8 +235,8 @@ namespace EmailParserHelper
                 var airtableOrder = ATbase.newOrderData(orderID);
                 //used to ensure that the printer operator is paid only for the custom portion of an order
                 airtableOrder.ValueOfInventory = (from record in transactionRecords
-                                            where record.TransactionType == TransactionTypes.Inventory
-                                            select record.Transaction.TotalPrice).Sum();
+                                                  where record.TransactionType == TransactionTypes.Inventory
+                                                  select record.Transaction.TotalPrice).Sum();
                 airtableOrder.MaterialCost = totalMaterialCost;
                 airtableOrder.Notes = orderData.LongDescription + DescriptionAddendum;
                 airtableOrder.ShippingCharge = orderData.ShippingCharge;
@@ -246,7 +250,7 @@ namespace EmailParserHelper
                 airtableOrder.OrderURL = orderData.OrderUrl;
                 airtableOrder.Shipper = defaultShipper;
 
-                var startingOrderStage = "Assigned"; 
+                var startingOrderStage = "Assigned";
 
                 if (hasCustomComponents && hasInventoryComponents)
                 {
@@ -292,20 +296,24 @@ namespace EmailParserHelper
 
                 orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
                 orderTracking.IncludedItems = (from record in transactionRecords
-                                               select record?.Record?.UniqueName)?.ToList();
+                                               select record?.Record?.UniqueName)?.Distinct().ToList();
                 orderTracking.OrderURL = orderData.OrderUrlMarkdown;
                 orderTracking.DesignerURL = DesignerURL;
                 orderTracking.Stage = startingOrderStage;
 
-                ATbase.CreateOrderRecord(airtableOrder);
                 ATTrackingBase.CreateOrderRecord(orderTracking);
+                Log.Add("created order in order tracking base");
+                ATbase.CreateOrderRecord(airtableOrder);
+                Log.Add("created order in main base");
+
+
             }
             else
             {
                 var errorMsg = "Order already exists in airtable:" + orderData.OneLineDescription;
                 Log.Add(errorMsg);
                 throw new Exception(errorMsg);
-            }           
+            }
             return true;
         }
 
@@ -324,7 +332,7 @@ namespace EmailParserHelper
             {
                 Log.Add("Record Exists");
 
-               // var asanaID = airtableOrderRecord.AsanaTaskID;
+                // var asanaID = airtableOrderRecord.AsanaTaskID;
                 if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord.ShipDate.Year < 2010))
                 {
                     Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
@@ -333,7 +341,7 @@ namespace EmailParserHelper
                         throw new Exception("Order shipped more than once: " + airtableOrderRecord?.OrderID);
                     }
                 }
-               // if (asanaID != "")
+                // if (asanaID != "")
                 {
                     //Log.Add("Checking Asana ID " + asanaID);
 
@@ -353,13 +361,12 @@ namespace EmailParserHelper
                         }
                         if (orderTrackingRecord.Stage == "Alt Ship")
                         {
-
                             airtableOrderRecord.Shipper = altShipper;
                         }
                         else
                         {
                             airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;//GetShipperName(currentTask, currentTask.Assignee.Name);
-                        }                   
+                        }
                         //airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
@@ -468,7 +475,6 @@ namespace EmailParserHelper
             if (fields["Type"] == "amazon")
             {
                 var amazonExpenseEntry = new AmazonExpenseEntry(fields["Body"]);
-                if (amazonExpenseEntry.isTotalValid())
                 {
                     foreach (var expenseEntry in amazonExpenseEntry.expenseEntries)
                     {
@@ -477,11 +483,12 @@ namespace EmailParserHelper
                         airtableExpensesEntry.DeliveredTo = amazonExpenseEntry.ReceiverName;
                         airtableExpensesEntry.Value = expenseEntry.CostForAllItems;
                         airtableExpensesEntry.Quantity = expenseEntry.Quantity;
+                        airtableExpensesEntry.OrderId = expenseEntry.orderID;
 
                         ATbase.CreateExpensesRecord(airtableExpensesEntry);
                     }
                 }
-                else
+                if (!amazonExpenseEntry.isTotalValid())
                 {
                     var msg = "Amazon expense total does not match sum of entries";
                     log.Add(msg);
@@ -535,36 +542,57 @@ namespace EmailParserHelper
             for (int i = 0; i < batches; i++)
             {
                 var pendingBeforeStart = component.Pending;
+                string cardName;
+                string notes = "";
+                var orderType = OrderTrackingData.OrderTypes.InventoryRequest;
+                string inventoryOrderOwner = "";
+                string inventoryOrderPrintersString = "";
+                List<string> printerNames = new List<string>();
+                string preferredInvPrinter = "";
+                var inventoryOrder = ATbase.newOrderData("I_" + Guid.NewGuid().ToString());
+
+
+                if (component.WarehouseQuantity > quantityPerBatch)
+                {
+                    cardName = $"({quantityPerBatch.ToString()}/{quantityPerBatch.ToString()}) {component.Name}";
+                    orderType = OrderTrackingData.OrderTypes.TransferRequest;
+                    component.WarehouseQuantity -= quantityPerBatch;
+                    notes = "Transfer Request - do not print";
+                    inventoryOrderOwner = warehouseManager;
+                }
+                else //not enough in warehouse, do inventory request
+                {
+                    cardName = $"(0/{quantityPerBatch.ToString()}) {component.Name}";
+                    inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
+                    inventoryOrder.TotalPrice = component.InternalPrice * quantityPerBatch;
+                }
+
                 inventoryBase.LogInventoryRequestCreation(component, quantityPerBatch);
-                string cardName = $"(0/{quantityPerBatch.ToString()}) {component.Name}";
+
                 DateTime dueDate = DateTime.Today.AddDays(10);
 
-                var inventoryOrder = ATbase.newOrderData("I_" + Guid.NewGuid().ToString());
                 inventoryOrder.Channel = "Internal";
                 inventoryOrder.Description = cardName;
                 inventoryOrder.DueDate = dueDate;
-                inventoryOrder.TotalPrice = component.InternalPrice * quantityPerBatch;
-                List<string> printerNames;
-                string preferredInvPrinter;
-                string inventoryOrderOwner = "";
+                inventoryOrder.Notes = notes;
+
 
                 inventoryBase.GetPotentialPrintersList(component, out printerNames, out preferredInvPrinter);
-                var inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
-                inventoryOrder.Notes = 
-                    "component ID: " + component.id + 
+                inventoryOrder.Notes +=
                     "\n" + component.Details +
-                    "\n" + inventoryOrderPrintersString+
+                    "\n" + inventoryOrderPrintersString +
                     "\n\n" + noteAddendum;
 
                 // mark as high priority if we don't have many in stock
-                if ((component.Quantity + pendingBeforeStart) < (component.MinimumStock) / 3)
-                {
-                    inventoryOrder.Rush = true;
-                }
+             //   if ((component.Quantity + pendingBeforeStart) < (component.MinimumStock) / 3)
+             //   {
+             //       inventoryOrder.Rush = true;
+             //   }
                 inventoryOrder.PrintOperator = inventoryOrderOwner;
 
                 var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);
                 inventoryOrderTrackingData.IsInventoryRequest = true;
+                inventoryOrderTrackingData.SetOrderType(orderType);
                 inventoryOrderTrackingData.IncludedComponentId = component.id;
                 inventoryOrderTrackingData.RequestedQuantity = quantityPerBatch;
                 if (!string.IsNullOrEmpty(inventoryOrder.PrintOperator))
@@ -575,7 +603,13 @@ namespace EmailParserHelper
                 ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
                 Log.Add("added task to order tracking" + cardName);
             }
+        }
 
+        private void GenerateOutOfStockNotification(InventoryComponent component)
+        {
+            var OutOfStockNotification = ATTrackingBase.NewOrderTrackingData("");
+            OutOfStockNotification.Description = "Out of stock notification: " + component.Name;
+            ATTrackingBase.CreateOrderRecord(OutOfStockNotification);
         }
 
         private static string GetPrinterDetailsString(ref string owner, string[] potentialPrinters, string preferredPrinter)

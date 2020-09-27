@@ -35,7 +35,12 @@ namespace EmailParserHelper
         {
             get
             {
-                return GetDescription("\r\n");
+                var desc = GetDescription("\r\n");
+                if (Transactions.Count > 1)
+                {
+                    desc = $"[{TotalNumberOfItems} Total Items]\r\n" + desc;
+                }
+                return desc;
             }
         }
 
@@ -69,6 +74,14 @@ namespace EmailParserHelper
         public string ImageURL { get; set; } = "";
         public double OrderTotal { get; set; } = 0;
         public double ShippingCharge { get; set; } = 0;
+
+        public int TotalNumberOfItems { get
+            {
+                return (from items in Transactions
+                               select items.Quantity).Sum();
+            }
+        }
+        
 
         public double SalesTax { get; set; } = 0;
         public Customer Customer { get; set; } = new Customer();
