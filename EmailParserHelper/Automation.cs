@@ -6,12 +6,9 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Net.Mail;
 using System.Collections.Specialized;
-//using EmailParserBackend.ScriptingInterface;
 using AirtableClientWrapper;
 using System.Text.RegularExpressions;
 using EmailParserHelper.Expenses;
-//using AsanaNet;
-//using AirtableApiClient;
 namespace EmailParserHelper
 {
 
@@ -25,6 +22,8 @@ namespace EmailParserHelper
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
         private AirtableOrders ATbase;
         private AirtableOrderTracking ATTrackingBase = new AirtableOrderTracking();
+        AirtableTransactions TransactionsBase = new AirtableTransactions();
+
 
         bool dryRun;
         private string etsyOrdersBoardName;
@@ -84,7 +83,7 @@ namespace EmailParserHelper
                 // Iterate over each transaction to check for inventory items
 
                 double totalMaterialCost = 0;
-                var transactionRecords = new List<TransactionRecord>();
+                var transactionRecordPairs = new List<TransactionRecordPair>();
 
                 foreach (var transaction in orderData.Transactions)
                 {
@@ -107,7 +106,7 @@ namespace EmailParserHelper
                         //if any item in the order is custom, the whole order is custom
                         hasCustomComponents = true;
                         currentTransactionType = TransactionTypes.UntrackedCustom;
-                        //only add to the catelog for etsy orders since shopify orders dont have size or color info
+                        //only add to the catalog for etsy orders since shopify orders dont have size or color info
                         if (channelKey == "etsy")
                         {
                             currentProductData = inventoryBase.AddProductRecord(transaction.CleanedItemName, transaction.Color, transaction.SizeInInches);
@@ -155,12 +154,13 @@ namespace EmailParserHelper
                     }
 
                     // add all transactions to a list including untracked items
-                    transactionRecords.Add(new TransactionRecord()
+                    transactionRecordPairs.Add(new TransactionRecordPair()
                     {
                         Transaction = transaction,
-                        Record = currentProductData,
+                        Product = currentProductData,
                         TransactionType = currentTransactionType
                     });
+
                 }
 
                 //if the order has only one product, update the product DB with the image
@@ -173,12 +173,12 @@ namespace EmailParserHelper
                 // determine the list of potential printers for the order. this is ther intersection of the potential printers 
                 HashSet<string> printersForOrderHashSet = null;
                 string preferredPrinter = "";
-                foreach (var transactionRecord in transactionRecords)
+                foreach (var transactionRecord in transactionRecordPairs)
                 {
                     if (transactionRecord.TransactionType != TransactionTypes.UntrackedCustom)
                     {
                         List<string> printersForProduct;
-                        inventoryBase.GetPotentialPrintersList(transactionRecord.Record, out printersForProduct, out preferredPrinter);
+                        inventoryBase.GetPotentialPrintersList(transactionRecord.Product, out printersForProduct, out preferredPrinter);
                         //ignore if printers in empty, which means anyone can print the product
                         if (printersForProduct != null && printersForProduct.Count > 0)
                         {
@@ -193,7 +193,32 @@ namespace EmailParserHelper
                         }
                     }
                 }
-                var potentialPrinters = printersForOrderHashSet?.ToArray();
+                string preferredShipper = defaultShipper;
+
+                //currently, always assign orders to the default shipper unless all transactions are specifically assigned to a single alternate shipper
+                foreach (var transactionRecord in transactionRecordPairs)
+                {
+                    if(transactionRecord.TransactionType == TransactionTypes.UntrackedCustom)
+                    {
+                        preferredShipper = defaultShipper;
+                        break;
+                    }
+                    else
+                    {
+                        inventoryBase.GetPreferredShipper(transactionRecord.Product, out preferredShipper);
+                        if (preferredShipper == defaultShipper)
+                        {
+                            break;
+                        } 
+                        else if (string.IsNullOrEmpty(preferredShipper))
+                        {
+                            preferredShipper = defaultShipper;
+                            break;
+                        }
+                    }
+                }
+
+                    var potentialPrinters = printersForOrderHashSet?.ToArray();
                 var printersString = GetPrinterDetailsString(ref owner, potentialPrinters, preferredPrinter);
                 Log.Add(printersString);
                 DescriptionAddendum += "\n\n" + printersString;
@@ -203,16 +228,15 @@ namespace EmailParserHelper
 
                 Log.Add("Total Material Cost:" + totalMaterialCost);
                 Log.Add("Adding Order " + orderID.ToString());
-                var projects = new List<string>() { productOrdersBoardName };
 
-                foreach (var transactionRecord in transactionRecords)
+                foreach (var transactionRecord in transactionRecordPairs)
                 {
                     if (transactionRecord.TransactionType != TransactionTypes.UntrackedCustom)
                     {
                         List<InventoryComponent> components = new List<InventoryComponent>();
                         if (!dryRun)
                         {
-                            inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Record, transactionRecord.Transaction.Quantity, out components, orderID);
+                            inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Product, transactionRecord.Transaction.Quantity, out components, orderID);
                         }
                         else
                         {
@@ -234,31 +258,30 @@ namespace EmailParserHelper
 
                 var airtableOrder = ATbase.newOrderData(orderID);
                 //used to ensure that the printer operator is paid only for the custom portion of an order
-                airtableOrder.ValueOfInventory = (from record in transactionRecords
+                airtableOrder.ValueOfInventory = (from record in transactionRecordPairs
                                                   where record.TransactionType == TransactionTypes.Inventory
                                                   select record.Transaction.TotalPrice).Sum();
                 airtableOrder.MaterialCost = totalMaterialCost;
                 airtableOrder.Notes = orderData.LongDescription + DescriptionAddendum;
                 airtableOrder.ShippingCharge = orderData.ShippingCharge;
                 airtableOrder.TotalPrice = orderData.OrderTotal;
-                airtableOrder.Description = orderData.ShortDescription;
+                airtableOrder.Description = (dryRun ? "(TEST)" : "") + orderData.ShortDescription;
                 airtableOrder.Channel = channel;
                 airtableOrder.DueDate = orderData.DueDate;
                 airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 12);
                 airtableOrder.SalesTax = orderData.SalesTax;
                 airtableOrder.CustomerEmail = orderData.Customer.Email;
                 airtableOrder.OrderURL = orderData.OrderUrl;
-                airtableOrder.Shipper = defaultShipper;
+                airtableOrder.Shipper = preferredShipper;
 
                 var startingOrderStage = "Assigned";
 
                 if (hasCustomComponents && hasInventoryComponents)
                 {
-                    projects.Add("Mixed Order");
                     var inventoryPackingList = new List<string>() { "---Inventory packing list---" };
                     var customPackingList = new List<string>() { "---Custom item packing list---" };
 
-                    foreach (var item in transactionRecords)
+                    foreach (var item in transactionRecordPairs)
                     {
                         if (item.TransactionType == TransactionTypes.Inventory)
                         {
@@ -276,8 +299,6 @@ namespace EmailParserHelper
                 if (!hasCustomComponents && hasInventoryComponents)
                 {
                     Log.Add("full inventory order");
-                    projects.Add("Shipper");
-                    airtableOrder.Shipper = defaultShipper;
                     startingOrderStage = "Ship";
                     airtableOrder.PrintOperator = "Inventory";
                 }
@@ -289,23 +310,37 @@ namespace EmailParserHelper
                 }
                 if (airtableOrder.Rush)
                 {
-                    projects.Add(HighPriorityProjectName);
                     airtableOrder.Description = "[Priority]" + airtableOrder.Description;
                 }
 
 
                 orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
-                orderTracking.IncludedItems = (from record in transactionRecords
-                                               select record?.Record?.UniqueName)?.Distinct().ToList();
+                orderTracking.IncludedItems = (from txns in orderData.Transactions
+                                              select txns.ProductData.UniqueName.Trim())?.Distinct().ToList();
+
                 orderTracking.OrderURL = orderData.OrderUrlMarkdown;
                 orderTracking.DesignerURL = DesignerURL;
                 orderTracking.Stage = startingOrderStage;
 
-                ATTrackingBase.CreateOrderRecord(orderTracking);
-                Log.Add("created order in order tracking base");
+                ATTrackingBase.CreateOrderRecord(orderTracking, out string orderRecordId);
+                Log.Add("created order in order tracking base, record ID: " + orderRecordId);
                 ATbase.CreateOrderRecord(airtableOrder);
                 Log.Add("created order in main base");
 
+                //need to loop again here after the order is created so the order record can be linked to the txn records
+                foreach(var txn in orderData.Transactions)
+                {
+                    if (txn.ProductData != null)
+                    {
+                        var transactionRecord = TransactionsBase.NewTransactionData(txn.ProductData);
+                        transactionRecord.Quantity = txn.Quantity;
+                        transactionRecord.OrderID = orderRecordId;
+                        transactionRecord.Paid = txn.ItemPrice;
+
+                        TransactionsBase.CreateOrderRecord(transactionRecord);
+                        Log.Add("created transaction record for " + txn.ProductData.UniqueName);
+                    }
+                }
 
             }
             else
@@ -348,26 +383,15 @@ namespace EmailParserHelper
                     //AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
                     var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
 
-                    //Log.Add("Found Asana Task For " + asanaID);
-                    //  if (currentTask.Assignee != null)
                     if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
-                        //if (currentTask.Assignee != null)
-
                         {
                             airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             //airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
                         }
-                        if (orderTrackingRecord.Stage == "Alt Ship")
-                        {
-                            airtableOrderRecord.Shipper = altShipper;
-                        }
-                        else
-                        {
-                            airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;//GetShipperName(currentTask, currentTask.Assignee.Name);
-                        }
-                        //airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
+
+                        airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
                         airtableOrderRecord.ShippingCost = double.Parse(shippingCost);
@@ -397,11 +421,6 @@ namespace EmailParserHelper
                         Log.Add("No owner assigned for " + orderID.ToString());
                     }
                 }
-                //else
-                //{
-                //    Log.Add("Blank asana ID");
-                //    return true;
-                //}
             }
             else
             {
@@ -600,7 +619,7 @@ namespace EmailParserHelper
                     inventoryOrderTrackingData.Stage = "Assigned";
                 }
                 ATbase.CreateOrderRecord(inventoryOrder);
-                ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData);
+                ATTrackingBase.CreateOrderRecord(inventoryOrderTrackingData, out _);
                 Log.Add("added task to order tracking" + cardName);
             }
         }
@@ -609,7 +628,7 @@ namespace EmailParserHelper
         {
             var OutOfStockNotification = ATTrackingBase.NewOrderTrackingData("");
             OutOfStockNotification.Description = "Out of stock notification: " + component.Name;
-            ATTrackingBase.CreateOrderRecord(OutOfStockNotification);
+            ATTrackingBase.CreateOrderRecord(OutOfStockNotification, out _);
         }
 
         private static string GetPrinterDetailsString(ref string owner, string[] potentialPrinters, string preferredPrinter)
@@ -643,13 +662,13 @@ namespace EmailParserHelper
         UntrackedCustom
 
     }
-    class TransactionRecord
+    class TransactionRecordPair
     {
 
 
         public TransactionTypes TransactionType { set; get; }
         public Transaction Transaction { set; get; }
-        public InventoryProduct Record { set; get; }
+        public InventoryProduct Product { set; get; }
 
 
         public string GetDescription()

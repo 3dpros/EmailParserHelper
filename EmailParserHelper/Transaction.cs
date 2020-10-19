@@ -145,6 +145,7 @@ namespace EmailParserHelper
             set
             {
                 _color = value;
+                RefreshProductData();
             }
         }
         private int _sizeInInches;
@@ -156,6 +157,7 @@ namespace EmailParserHelper
             set
             {
                 _sizeInInches = value;
+                RefreshProductData();
             }
         }
 

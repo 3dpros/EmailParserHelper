@@ -13,7 +13,7 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var sut = new EtsyOrder(etsyEmailDummy, "");
+            var sut = new EtsyOrder(etsyEmail, "");
 
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
@@ -346,19 +346,18 @@ Your Etsy Order
 
 Hi Al Billington,
 
-We've finished processing your Etsy sale of 2 items.
+We've finished processing your Etsy sale of one item.
 
-Your order number is 1518764111.
+Your order number is 1772497744.
 
 View the invoice: 
-http://www.etsy.com/your/orders/1518764111
+http://www.etsy.com/your/orders/1772497744
 
 ------------------------------------------------------
-Note from phillip.adler6@gmail.com:
+Note from samanthatomarchio@gmail.com:
 ------------------------------------------------------
 
-The buyer did leave a notae.
-another line too.
+The buyer did not leave a note.
 
 
 ------------------------------------------------------
@@ -369,65 +368,31 @@ Shop:               Al Billington
 
 --------------------------------------
 
-Transaction ID:     1518764111
-Item:               zzz - dummy item
-Set Quantity: 3
-OtherOption: 32
+
+
+Transaction ID:     2094080391
+Item:               zzz - dummy item | Sizes up to 12&quot; | large crochet blocking for big granny squares, motifs, or hexies
+Size: 12 inches
 Quantity:           1
-Item price:         $12.34
+Item price:         $72.00
 
+Item total:         $72.00
+
+
+
+
+
+Shipping:           $0.00  ()
+Sales Tax:          $1.48
 --------------------------------------
-Item total:         $90.00
+Order Total:        $17.48
 
---------------------------------------
-Item total:         $125.00
-
-
-Applied discounts
-- CLITORISEARRINGSALE
-
-Discount:          -$3.90
---------------------------------------
-Subtotal:           $121.10
-
-Shipping:           $2.00  ()
-Sales Tax:          $8.79
---------------------------------------
-Order Total:        $129.89
 
 Shipping Address:
 <address >
 
-<span class='name'>phillip adler</span><br/><span class='first-line'>2725 se 32nd ave</span><br/><span class='city'>PORTLAND</span>, <span class='state'>OR</span> <span class='zip'>97202</span><br/><span class='country-name'>United States</span>
+<span class='name'>Samantha Tomarchio</span><br/><span class='first-line'>3390 Dwight Way</span><br/><span class='city'>BERKELEY</span>, <span class='state'>CA</span> <span class='zip'>94704</span><br/><span class='country-name'>United States</span>
 <br/>
-
-
-<!-- Hidden Fields -->
-<input type=""hidden"" name=""country_code"" value=""209""/>
-
-< !--Address Verification-- >
-
-</ address >
-
-------------------------------------------------------
-Contacting the Buyer
-------------------------------------------------------
-
-*Send a message with Etsy's messaging system:
-http://www.etsy.com/conversations/new?with_id=247009438
-
-            Or
-
-            * Email phillip.adler6@gmail.com
-
-             ------------------------------------------------------
-
-If you have questions or were not involved in this transaction,
-please contact our support team: http://www.etsy.com/help/contact
-
-            Thanks,
-Etsy
-
 ";
 
 
@@ -447,7 +412,7 @@ Etsy
         {
             var inventoryBase = new AirtableItemLookup();
 
-            var test = new Automation();
+            var test = new Automation(true);
             Order order;
             test.ProcessOrder(etsyEmailDummy, "", "Etsy", out order, out _);
 
