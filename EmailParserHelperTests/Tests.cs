@@ -13,7 +13,7 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var sut = new EtsyOrder(etsyEmail, "");
+            var sut = new EtsyOrder(etsyEmailDummy, "");
 
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
@@ -39,13 +39,21 @@ namespace EmailParserHelperTests
         [Fact]
         public void ShipOrder()
         {
-            var test = new Automation(true);
-            Order order;
-          //  test.ProcessOrder(etsyEmail, "Etsy", out order);
+            var test = new Automation();
+            test.CompleteOrder("1885", "0.00");
 
-            test.CompleteOrder("1696585177", "3.52");
         }
+        [Fact]
+        public void ShipOrderParser()
+        {
+            var log = new List<string>();
+            NameValueCollection fields = new NameValueCollection();
+            fields.Add("Order ID", "1878");
+            fields.Add("Shipping Cost", "0.00");
 
+            var returnVal = ParserMethods.ProcessShippedProductOrder(ref log, fields, false);
+
+        }
 
         [Fact]
         public void CreateInventoryRequestOrder()
@@ -67,46 +75,50 @@ namespace EmailParserHelperTests
             Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
         }
 
-        string shopifyEmail = @"
-*  1x Full Size Model Clitoris (Gold) - Gold (SKU:ClitorisModel_gold) - $14.00 each ]]
-*  2x Dumbbell - Gold | test () - $22.00 each ]]
-*  3x Weight Plate - Gold (SKU:WeightPlateClock_11in) - $34.00 each ]]
+        string shopifyEmail = @"**  3x Weight Plate Ornament - Default Text / Red (SKU:
+WeightPlateOrnament_red) - $14.00 each ]]
+*  3x Weight Plate Ornament - Default Text / Black with Gray Text
+(SKU: WeightPlateOrnament_blacksilver) - $17.00 each ]]
+*  3x Weight Plate Ornament - Default Text / Black (SKU:
+WeightPlateOrnament_black) - $14.00 each ]]
+*  3x Weight Plate Ornament - Default Text / Silver (SKU:
+WeightPlateOrnament_silver) - $14.00 each ]]
+
 _____
-Order Note:
 
-Shipping Cost: $2.04
+Shipping Cost: $25.00
 
-Total Payment: $114.05
+Total Payment: $143.59
 
-Customer Name: Miguel Rodriguez
+Customer Name: Kara Orser
 
-Customer Email: 8djhv99rxh409qr@marketplace.asmazon.com
+Customer Email: karaonbroadway@hotmail.com
 
 Order URL:
-https://liftergifts.myshopify.com/admin/orders/1853957537907
+https://liftergifts.myshopify.com/admin/orders/3057119330483
 
-Order ID: 1853957537907
+Order ID: 3057119330483
 
-Order Name: #1130
+Order Name: #1909
 
 Payment processing method:
 
-amazon_marketplace
+shopify_payments
 
 Delivery method:
-FreeEconomy
+International Shipping
 
 Shipping address:
 
-Miguel Rodriguez
+Kara Orser
 
-501 SW 98TH PL
+53 The Links Rd, Suite 200
 
-MIAMI, Florida  33174-1961
+Toronto, Ontario  M2P1T7
 
-United States
+Canada";
 
-+1 412-532-4665 ext. 47569";
+
         string etsyEmail = @"------------------------------------------------------
 Your Etsy Order
 ------------------------------------------------------
@@ -357,8 +369,7 @@ http://www.etsy.com/your/orders/1772497744
 Note from samanthatomarchio@gmail.com:
 ------------------------------------------------------
 
-The buyer did not leave a note.
-
+I'm messaging you!!!
 
 ------------------------------------------------------
 Order Details
@@ -368,24 +379,32 @@ Shop:               Al Billington
 
 --------------------------------------
 
-
-
-Transaction ID:     2094080391
-Item:               zzz - dummy item | Sizes up to 12&quot; | large crochet blocking for big granny squares, motifs, or hexies
-Size: 12 inches
+Transaction ID:     2124091829
+Item:               Aeropress Compatible Organizer [3D Printable STL File] | 3D printed coffee maker counter organizer
 Quantity:           1
-Item price:         $72.00
+Item price:         $5.00
 
-Item total:         $72.00
+--------------------------------------
+Item total:         $5.00
 
+--------------------------------------
 
+Transaction ID:     2124091829
+Item:               Aeropress Compatible Organizer | 3D printed coffee maker counter organizer
+Quantity:           1
+Item price:         $15.00
 
+--------------------------------------
+Item total:         $15.00
+
+Applied discounts
+- ICANWAIT
 
 
 Shipping:           $0.00  ()
-Sales Tax:          $1.48
+Tax:                $0.00
 --------------------------------------
-Order Total:        $17.48
+Order Total:        $6.00
 
 
 Shipping Address:
@@ -446,8 +465,7 @@ Shipping Address:
         }
 
         string amazonExpenseEmail = @"Amazon.com Order Confirmation
-Amazon.com Order Confirmation
-Order #111-5913406-9986635
+Order #112-2455119-0606629
 www.amazon.com/ref=TE_tex_h
 _______________________________________________________________________________________
 
@@ -456,7 +474,7 @@ Hello 3DPros LLC,
 Thank you for shopping with us. We’ll send a confirmation once your items have shipped.
 
 Your order details are indicated below. The payment details of your transaction can be found at:
-https://www.amazon.com/gp/css/summary/print.html/ref=TE_oi?ie=UTF8&orderID=111-5913406-9986635
+https://www.amazon.com/gp/css/summary/print.html/ref=TE_oi?ie=UTF8&orderID=112-2455119-0606629
 
 If you would like to view the status of your order or make any changes to it, please visit Your Orders on Amazon.com at:
 https://www.amazon.com/gp/css/your-orders-access/ref=TE_gs
@@ -464,11 +482,12 @@ https://www.amazon.com/gp/css/your-orders-access/ref=TE_gs
 
 This order is placed on behalf of 3DPros.
      Your guaranteed delivery date is:
-               Friday, August 14
+               tomorrow, October 24
 
                 
      Your shipping speed:
                One-Day Shipping
+
 
      Your order will be sent to:
                Al (3DPros)
@@ -477,35 +496,29 @@ This order is placed on behalf of 3DPros.
 =======================================================================================
 
 Order Details
-Order #111-5913406-9986635
-Placed on today, August 10
+Order #113-5889773-0774657
+Placed on today, December 8
 
-               ROLLO Thermal Direct Shipping Label (Pack of 500 4x6 Fan-Fold Labels) - Commercial Grade
-               $19.99
+               Inkbird ITC-1000F 2 Stage Temperature Controller Cooling and Heating Modes Celsius and Fahrenheit
+               $15.99
 
-               Sold by: NELU Fulfillment
+               Sold by: Inkbird
 
                Condition: New
 
-               5 x HATCHBOX PLA 3D Printer Filament, Dimensional Accuracy +/- 0.03 mm, 1 kg Spool, 1.75 mm, Silver
-               $19.99
+               KKBESTPACK 4 x 8 Inch Kraft Bubble Mailers Padded Shipping Envelopes 50 Pcs
+               $7.95
 
                Sold by: Amazon.com Services LLC
 
 _______________________________________________________________________________________
 
-              Item Subtotal: $119.94
 
-              Shipping & Handling: $0.00
-
-              Total Before Tax: $119.94
-              Estimated Tax: $0.00
-
-
-              Order Total: $119.94
+              Order Total: $29.93
 
 
 =======================================================================================
+
 
 To learn more about ordering, go to Ordering from Amazon.com at:
 www.amazon.com/gp/help/customer/display.html/ref=TE_tex_ofa?nodeId=468466
@@ -525,12 +538,14 @@ https://www.amazon.com/gp/help/customer/display.html/ref=hp_bc_nav?ie=UTF8&nodeI
 
 This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.
 
+    
+
      ";
         [Fact]
         public void  AddAmazonExpense()
         {
             var expense = new AmazonExpenseEntry(amazonExpenseEmail);
-            Assert.True(expense.isTotalValid());
+            Assert.True(expense.getOveragesPaid() < .2);
         }
 
 

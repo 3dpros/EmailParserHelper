@@ -34,11 +34,35 @@ namespace EmailParserHelper
 
         }
 
-        public static bool ProcessShippedProductOrder(ref List<string> log, NameValueCollection fields, bool dryRun = false)
+        public static bool AddOrderFields(NameValueCollection fields, ref List<string> log, bool dryRun = false)
         {
+            fields.Add("NotificationEmailAddresses", dryRun ? "altbillington@gmail.com" : "altbillington@gmail.com, daniel.c.english@gmail.com");
+            var automation = new Automation(dryRun);
+
+            try
+            {
+                var result = automation.ProcessOrderFromFields(fields, fields["Channel"], out var OrderData, out var orderTracking);
+                var operatorString = string.IsNullOrEmpty(orderTracking?.PrintOperator) ? "" : "(" + orderTracking.PrintOperator.Split(' ')[0] + ")";
+                fields.Add("NotificationEmailSubject", (dryRun ? "(TEST)" : "") + "[" + (OrderData.OrderTotal - OrderData.ShippingCharge).ToString("C") + "]" + operatorString + " " + OrderData.OneLineDescription);
+                log = automation.Log;
+                return result;
+            }
+            catch (Exception e)
+            {
+                log = automation.Log;
+                log.Add(e.Message);
+                log.Add(e.StackTrace);
+            }
+            return false;
+
+        }
+
+        public static bool ProcessShippedProductOrder(ref List<string> log, NameValueCollection fields, bool dryRun = false)
+       {         
             var automation = new Automation(dryRun);
             try
             {
+                log.Add("starting complete order");
                 var result = automation.CompleteOrder(fields["Order ID"], fields["Shipping Cost"]);
                 log = automation.Log;
 
@@ -47,10 +71,12 @@ namespace EmailParserHelper
             catch (Exception e)
             {
                 log = automation.Log;
-                log.Add(e.InnerException.Message);
-                log.Add(e.StackTrace);
+                log.Add("exception occurred");
+                log.Add(e.Message);
+                log.Add(e.Source);
+                log.Add(e.InnerException?.Message);
+                log.Add(e.InnerException?.StackTrace);
             }
-
             return false;
         }
 
@@ -59,10 +85,25 @@ namespace EmailParserHelper
             var automation = new Automation(dryRun);
             try
             {
-                automation.CompleteInventoryRequest(fields["Task Name"]);
+                log.Add("starting complete inventory request order: " + fields["Task Name"]);
+                int.TryParse(fields["Requested Quantity"], out int requestedQuantity);
+                int.TryParse(fields["Produced Quantity"], out int producedQuantity);
+                if (producedQuantity != 0)
+                {
+                    automation.CompleteInventoryRequest(fields["Component ID"], producedQuantity, requestedQuantity);
+                    log.Add("updated inventory quantities.");
+                }
+                else
+                {
+                    //deprecate this once new method is validated
+                    automation.CompleteInventoryRequest(fields["Task Name"]);
+                    log.Add("updated inventory quantities (Legacy approach, no produced quantity specified).");
+
+                }
                 if (!string.IsNullOrEmpty(fields["Order ID"]))
                 {
                     automation.UpdateCompletedInventoryRequestOrderAirtable(fields["Order ID"], fields["Owner"]);
+
                 }
                 else
                 {
@@ -75,7 +116,9 @@ namespace EmailParserHelper
             catch (Exception e)
             {
                 log = automation.Log;
+                log.Add(e.StackTrace);
                 log.Add(e.Message);
+
             }
 
             return false;

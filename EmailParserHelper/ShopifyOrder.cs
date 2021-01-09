@@ -42,6 +42,10 @@ namespace EmailParserHelper
             {
                 return MatchRegex(@"Order URL\:\r\n([^\n\r]*)?", 1);
             }
+            set
+            {
+
+            }
         }
 
         //1x Weight Plate Ornament (SKU: WeightPlateOrnament_silver) - 

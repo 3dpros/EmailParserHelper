@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -13,15 +14,46 @@ namespace EmailParserHelper
         {
             EmailBody = emailBody;
         }
+
+        public Order(NameValueCollection fields)
+        {
+            EmailBody = "";
+            OrderID = fields["Order ID"];
+            OrderTotal = double.Parse(fields["Order Total"]);
+            ManualDescription = fields["Short Description"];
+            _dueDateKnown = DateTime.Parse(fields["Due Date"]);
+            _dateIsKnown = true;
+            int.TryParse(fields["Size"], out int size);
+            int.TryParse(fields["Quantity"], out int quantity);
+            int.TryParse(fields["SetQuantity"], out int setQuantity);
+            double.TryParse(fields["Priority"], out double shippingCharge);
+            ShippingCharge = shippingCharge;
+            var firstTransaction = new Transaction(fields["First Item"], fields["Color"], size);
+            firstTransaction.Quantity = quantity * Math.Max(1,setQuantity);
+            firstTransaction.Personalization = fields["Personalization"];
+            Transactions.Add(firstTransaction);
+        }
+
         public string EmailBody { get; }
-        public abstract string OrderUrl { get; }
+        public abstract string OrderUrl { get; set; }
         public string OrderUrlMarkdown {
             get
             {
                 return $"[{OrderID}]({OrderUrl})";
             }
         }
+        /*
+         * Shipping Charge empty 
+            Order Total 360.72 
+            Order ID 1892156823 
+            Short Description Partially refundedDumbbell Ornament | 3D printed ornament  ...... 
+            Long Description Partially refundedDumbbell Ornament | 3D printed ornament  ...... 
+            Customer Username  
+            Customer Email empty 
+            Channel Etsy 
+            Sales Tax 0 
 
+         */
         public string OrderID { get; set; }
         public List<Transaction> Transactions { get; set; } = new List<Transaction>();
         public string OneLineDescription
@@ -31,6 +63,7 @@ namespace EmailParserHelper
                 return GetDescription("  ||  ");
             }
         }
+        public string ManualDescription { get;  set; }
         public string ShortDescription
         {
             get
@@ -40,7 +73,33 @@ namespace EmailParserHelper
                 {
                     desc = $"[{TotalNumberOfItems} Total Items]\r\n" + desc;
                 }
+                else if (Transactions.Count == 0)
+                {
+                    desc = ManualDescription;
+                }
+
                 return desc;
+
+            }
+        }
+
+        private DateTime _dueDateKnown = default;
+        private bool _dateIsKnown = false;
+
+
+        public bool DigitalOrder
+        {
+            get
+            {
+                if (Transactions.Count == 0)
+                    return false;
+                //order is digital only if all transactions are
+                var nonDigitalTransactions = from transaction in Transactions
+                                            where !transaction.IsDigital
+                                            select transaction;
+                if (nonDigitalTransactions.Any())
+                    return false;                      
+                return true;
             }
         }
 
@@ -67,6 +126,11 @@ namespace EmailParserHelper
                 {
                     longDescription = $"Note: {Notes.Trim()} \r\n\r\n{longDescription}";
                 }
+                if(MarkedAsGift)
+                {
+                    longDescription = "[Gift Message] " + longDescription;
+                }
+
                 return longDescription;
             }
         }
@@ -74,6 +138,7 @@ namespace EmailParserHelper
         public string ImageURL { get; set; } = "";
         public double OrderTotal { get; set; } = 0;
         public double ShippingCharge { get; set; } = 0;
+        public bool DelayOrder = false;
 
         public int TotalNumberOfItems { get
             {
@@ -90,16 +155,22 @@ namespace EmailParserHelper
         {
             get
             {
+                if(_dateIsKnown)
+                {
+                    return _dueDateKnown;
+                }
                 if (UseBusinessDaysForProcessingTime)
                 {
-                    return AddBusinessDays(DateTime.Now, ProcessingTimeInDays);
+                    return AddBusinessDays(DateTime.Now, DelayOrder?24:ProcessingTimeInDays);
                 }
                 else
                 {
-                    return DateTime.Now.AddDays(ProcessingTimeInDays);
+                    return DateTime.Now.AddDays(DelayOrder?24:ProcessingTimeInDays);
                 }
             }
         }
+
+        public bool MarkedAsGift { get; set; }
 
         protected int ProcessingTimeInDays = 6;
         protected bool UseBusinessDaysForProcessingTime = true;

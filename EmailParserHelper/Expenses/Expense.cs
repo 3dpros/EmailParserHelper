@@ -33,14 +33,14 @@ namespace EmailParserHelper
         public string ReceiverName { set; get; }
         public double NominalOrderTotal { set; get; }
 
-        public bool isTotalValid()
+        public double getOveragesPaid()
         {
-            double actualTotal = 0;
+            double calculatedTotal = 0;
             foreach(var expense in expenseEntries)
             {
-                actualTotal += expense.CostForAllItems;
+                calculatedTotal += expense.CostForAllItems;
             }
-            return (Math.Abs(actualTotal - NominalOrderTotal) < .1);
+            return NominalOrderTotal - calculatedTotal;
         }
     }
 

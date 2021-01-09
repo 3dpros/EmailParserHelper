@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -27,6 +28,10 @@ namespace EmailParserHelper
             {
                 Notes = orderNote;
             }
+            if(EmailBody.Contains("Marked as gift"))
+            {
+                MarkedAsGift = true;
+            }
 
             OrderID = MatchRegex(OrderURLPattern, 1);
             SalesTax = MatchNumber(@"Tax\:\s *\$([^\n]*)", 1);
@@ -35,6 +40,11 @@ namespace EmailParserHelper
             OrderTotal = MatchNumber(@"Order Total\:\s*\$\s*([^\n\r]*)?",1);
             ShippingCharge = MatchNumber(@"Shipping\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
             ImageURL = Regex.Match(HTMLOrderEmail, @"(https:\/\/i.etsystatic.com\/.*)\""")?.Groups[1]?.Value;
+            DelayOrder = Regex.Match(plainTextEtsyOrderEmail, "ICANWAIT", RegexOptions.Singleline).Success;
+            if(!DelayOrder)
+            {
+                DelayOrder = Regex.Match(HTMLOrderEmail, "3 weeks", RegexOptions.Singleline).Success;
+            }
 
             var transactionsProcessingTimeList = (from txn in Transactions
                                              where txn.ProductData != null
@@ -43,17 +53,33 @@ namespace EmailParserHelper
             {
                 ProcessingTimeInDays = Math.Max(transactionsProcessingTimeList.Max(), EtsyMinimumProcessingDays);
             }
+
+
+        }
+
+        public EtsyOrder(NameValueCollection fields) : base(fields)
+        {
+            OrderUrl = "https://www.etsy.com/your/orders/sold/125458821940?order_id=" + OrderID;
         }
 
 
         private readonly string OrderURLPattern = "http://www.etsy.com/your/orders/(\\d*)";
 
-
+        private string _OrderUrl;
         public override string OrderUrl
         {
             get
             {
-                return MatchRegex(OrderURLPattern);
+                var retval = MatchRegex(OrderURLPattern);
+                if (string.IsNullOrEmpty(retval))
+                {
+                    retval = _OrderUrl;
+                }
+                return retval;
+            }
+            set
+            {
+                _OrderUrl = value;
             }
         }
 

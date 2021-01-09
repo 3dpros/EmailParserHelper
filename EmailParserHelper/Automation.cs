@@ -36,12 +36,10 @@ namespace EmailParserHelper
             ATbase = new AirtableOrders(testing);
         }
 
-        public bool ProcessOrder(string emailBody, string emailHTML, string channel, out Order orderData, out OrderTrackingData orderTracking)
+        public Order getOrderData(string emailBody, string emailHTML, string channel, out bool UseSKUsForItemLookup)
         {
-            orderTracking = null;
-            Log.Add("Starting Airtable Entry (v2)");
+            EmailParserHelper.Order orderData;
             var channelKey = channel.ToLower();
-            bool UseSKUsForItemLookup;
             Log.Add("parsing order using channel: " + channelKey);
 
             if (channelKey == "shopify" || channelKey == "amazon")
@@ -51,13 +49,35 @@ namespace EmailParserHelper
             }
             else if (channelKey == "etsy")
             {
-                orderData = new EmailParserHelper.EtsyOrder(emailBody, emailHTML);
+                orderData = new EtsyOrder(emailBody, emailHTML);
                 UseSKUsForItemLookup = false;
             }
             else
             {
                 throw new Exception("Unknown channel specified: " + channelKey);
             }
+            return orderData;
+        }
+
+        public bool ProcessOrderFromFields(NameValueCollection fields, string channel, out Order orderData, out OrderTrackingData orderTracking)
+        {
+            //etsy only currently
+            orderData = new EtsyOrder(fields);
+            return ProcessOrder(channel, orderData, false, out orderTracking);
+        }
+
+        public bool ProcessOrder(string emailBody, string emailHTML, string channel, out Order orderData, out OrderTrackingData orderTracking)
+        {
+            orderData = getOrderData(emailBody, emailHTML, channel, out bool useSKUsForItemLookup);
+            return ProcessOrder(channel, orderData, useSKUsForItemLookup, out orderTracking);
+        }
+
+        public bool ProcessOrder(string channel, Order orderData, bool UseSKUsForItemLookup, out OrderTrackingData orderTracking)
+        {
+            orderTracking = null;
+            var channelKey = channel.ToLower();
+
+            Log.Add("Starting Airtable Entry (v2)");
 
             var productOrdersBoardName = dryRun ? "Etsy Orders (Test)" : "Etsy Orders";
             var orderID = orderData.OrderID;
@@ -248,10 +268,6 @@ namespace EmailParserHelper
                             {
                                 GenerateInventoryRequest(component);
                             }
-                            if (component.Quantity < 0)
-                            {
-                                GenerateOutOfStockNotification(component);
-                            }
                         }
                     }
                 }
@@ -263,12 +279,13 @@ namespace EmailParserHelper
                                                   select record.Transaction.TotalPrice).Sum();
                 airtableOrder.MaterialCost = totalMaterialCost;
                 airtableOrder.Notes = orderData.LongDescription + DescriptionAddendum;
+                airtableOrder.OrderNote = orderData.Notes;
                 airtableOrder.ShippingCharge = orderData.ShippingCharge;
                 airtableOrder.TotalPrice = orderData.OrderTotal;
                 airtableOrder.Description = (dryRun ? "(TEST)" : "") + orderData.ShortDescription;
                 airtableOrder.Channel = channel;
                 airtableOrder.DueDate = orderData.DueDate;
-                airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 12);
+                airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 14);
                 airtableOrder.SalesTax = orderData.SalesTax;
                 airtableOrder.CustomerEmail = orderData.Customer.Email;
                 airtableOrder.OrderURL = orderData.OrderUrl;
@@ -313,32 +330,44 @@ namespace EmailParserHelper
                     airtableOrder.Description = "[Priority]" + airtableOrder.Description;
                 }
 
+                string orderRecordId = string.Empty;
+                if (!orderData.DigitalOrder)
+                {
+                    orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
+                    orderTracking.IncludedItems = (from txns in orderData.Transactions
+                                                   where txns.ProductData != null
+                                                   select txns?.ProductData.UniqueName.Trim())?.Distinct().ToList();
 
-                orderTracking = ATTrackingBase.OrderDataToOrderTrackingData(airtableOrder);
-                orderTracking.IncludedItems = (from txns in orderData.Transactions
-                                              select txns.ProductData.UniqueName.Trim())?.Distinct().ToList();
+                    orderTracking.OrderURL = orderData.OrderUrlMarkdown;
+                    orderTracking.DesignerURL = DesignerURL;
+                    orderTracking.Stage = startingOrderStage;
+                    orderTracking.OrderNote = orderData.Notes;
+                    ATTrackingBase.CreateOrderRecord(orderTracking, out orderRecordId);
 
-                orderTracking.OrderURL = orderData.OrderUrlMarkdown;
-                orderTracking.DesignerURL = DesignerURL;
-                orderTracking.Stage = startingOrderStage;
-
-                ATTrackingBase.CreateOrderRecord(orderTracking, out string orderRecordId);
-                Log.Add("created order in order tracking base, record ID: " + orderRecordId);
+                    Log.Add("created order in order tracking base, record ID: " + orderRecordId);
+                }
+                else
+                {
+                    Log.Add("no tracking entry needed, order is digital");
+                    airtableOrder.ShipDate = DateTime.Now;
+                }
                 ATbase.CreateOrderRecord(airtableOrder);
                 Log.Add("created order in main base");
-
-                //need to loop again here after the order is created so the order record can be linked to the txn records
-                foreach(var txn in orderData.Transactions)
+                if (!orderData.DigitalOrder)
                 {
-                    if (txn.ProductData != null)
+                    //need to loop again here after the order is created so the order record can be linked to the txn records
+                    foreach (var txn in orderData.Transactions)
                     {
-                        var transactionRecord = TransactionsBase.NewTransactionData(txn.ProductData);
-                        transactionRecord.Quantity = txn.Quantity;
-                        transactionRecord.OrderID = orderRecordId;
-                        transactionRecord.Paid = txn.ItemPrice;
+                        if (txn.ProductData != null)
+                        {
+                            var transactionRecord = TransactionsBase.NewTransactionData(txn.ProductData);
+                            transactionRecord.Quantity = txn.Quantity;
+                            transactionRecord.OrderID = orderRecordId;
+                            transactionRecord.Paid = txn.ItemPrice;
 
-                        TransactionsBase.CreateOrderRecord(transactionRecord);
-                        Log.Add("created transaction record for " + txn.ProductData.UniqueName);
+                            TransactionsBase.CreateOrderRecord(transactionRecord);
+                            Log.Add("created transaction record for " + txn.ProductData.UniqueName);
+                        }
                     }
                 }
 
@@ -368,7 +397,7 @@ namespace EmailParserHelper
                 Log.Add("Record Exists");
 
                 // var asanaID = airtableOrderRecord.AsanaTaskID;
-                if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord.ShipDate.Year < 2010))
+                if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord?.ShipDate.Year < 2010))
                 {
                     Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
                     if (airtableOrderRecord.Channel.ToLower() == "etsy")
@@ -379,10 +408,10 @@ namespace EmailParserHelper
                 // if (asanaID != "")
                 {
                     //Log.Add("Checking Asana ID " + asanaID);
-
+                    Log.Add("Record Exists");
                     //AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
                     var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
-
+                    Log.Add("found order tracking record: " + orderTrackingRecord.Description);
                     if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
                         {
@@ -433,16 +462,29 @@ namespace EmailParserHelper
         public void CompleteInventoryRequest(string TaskName)
         {
             var matches = Regex.Match(TaskName, @"\((\d*)\/(\d*)\)\s*(.*)").Groups;
-            CompleteInventoryRequest(matches[3].Value, int.Parse(matches[1].Value), int.Parse(matches[2].Value));
-        }
-        public void CompleteInventoryRequest(string componentName, int quantityCompleted, int quantityRequested)
-        {
+            var componentName = matches[3].Value;
             var component = inventoryBase.GetComponentByName(componentName, false);
-            Log.Add("Inventory order completed, updating counts");
-            Log.Add("Update count of " + component.Name + " by +" + quantityCompleted.ToString());
+
+            if (component == null)
+            {
+                throw new Exception("Item was not found in the components database:" + componentName);
+            }
+
+            CompleteInventoryRequestCore(component, int.Parse(matches[1].Value), int.Parse(matches[2].Value));
+        }
+        public void CompleteInventoryRequest(string componentID, int quantityProduced, int quantityRequested)
+        {
+            var component = inventoryBase.GetComponentByID(componentID);
+            CompleteInventoryRequestCore(component, quantityProduced, quantityRequested);
+        }
+
+        private void CompleteInventoryRequestCore(InventoryComponent component, int quantityProduced, int quantityRequested)
+        {
+            Log.Add("Inventory order completed, updating counts for:" + component.Name);
+            Log.Add("Update count of " + component.Name + " by +" + quantityProduced.ToString());
             Log.Add("Original request was for " + quantityRequested.ToString());
 
-            inventoryBase.UpdateComponentQuantity(component, quantityCompleted, quantityRequested);
+            inventoryBase.UpdateComponentQuantity(component, quantityProduced, quantityRequested);
         }
 
         public void UpdateCompletedInventoryRequestOrderAirtable(string orderID, string printOperator)
@@ -507,12 +549,24 @@ namespace EmailParserHelper
                         ATbase.CreateExpensesRecord(airtableExpensesEntry);
                     }
                 }
-                if (!amazonExpenseEntry.isTotalValid())
+                if (amazonExpenseEntry.getOveragesPaid() > .2)
                 {
-                    var msg = "Amazon expense total does not match sum of entries";
+                    var msg = "Amazon expense total does not match sum of entries. creating overage expense";
+                    log.Add(msg);
+                    var airtableExpensesEntryOverage = new ExpensesData("Unaccounted Amazon Overage");
+                    airtableExpensesEntryOverage.Date = DateTime.Now;
+                    airtableExpensesEntryOverage.Value = amazonExpenseEntry.getOveragesPaid();
+                    ATbase.CreateExpensesRecord(airtableExpensesEntryOverage);
+
+
+                }
+                else if (amazonExpenseEntry.getOveragesPaid() < -.2)
+                {
+                    var msg = "Amazon expense total is less than sum of entries";
                     log.Add(msg);
                     throw new Exception(msg);
                 }
+
             }
             else //wells transactions are parsed in emailParser for now
             {
@@ -531,6 +585,9 @@ namespace EmailParserHelper
             {
                 order.AmountRefunded = amountRefunded;
                 ATbase.CreateOrderRecord(order, true);
+                var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out string record);
+               // orderTrackingEntryToRefund.tra
+
             }
             else
             {
@@ -571,9 +628,13 @@ namespace EmailParserHelper
                 var inventoryOrder = ATbase.newOrderData("I_" + Guid.NewGuid().ToString());
 
 
-                if (component.WarehouseQuantity > quantityPerBatch)
+                if (component.WarehouseQuantity >= quantityPerBatch)
                 {
-                    cardName = $"({quantityPerBatch.ToString()}/{quantityPerBatch.ToString()}) {component.Name}";
+                    if (component.WarehouseQuantity < quantityPerBatch * 2)
+                    {
+                        quantityPerBatch = component.WarehouseQuantity;
+                    }
+                    cardName = $"[TRANSFER] {component.Name}";
                     orderType = OrderTrackingData.OrderTypes.TransferRequest;
                     component.WarehouseQuantity -= quantityPerBatch;
                     notes = "Transfer Request - do not print";
@@ -581,7 +642,8 @@ namespace EmailParserHelper
                 }
                 else //not enough in warehouse, do inventory request
                 {
-                    cardName = $"(0/{quantityPerBatch.ToString()}) {component.Name}";
+                    cardName = $"[INV] {component.Name}";
+                    inventoryBase.GetPotentialPrintersList(component, out printerNames, out inventoryOrderOwner);
                     inventoryOrderPrintersString = GetPrinterDetailsString(ref inventoryOrderOwner, printerNames.ToArray(), preferredInvPrinter);
                     inventoryOrder.TotalPrice = component.InternalPrice * quantityPerBatch;
                 }
@@ -596,17 +658,12 @@ namespace EmailParserHelper
                 inventoryOrder.Notes = notes;
 
 
-                inventoryBase.GetPotentialPrintersList(component, out printerNames, out preferredInvPrinter);
                 inventoryOrder.Notes +=
                     "\n" + component.Details +
                     "\n" + inventoryOrderPrintersString +
                     "\n\n" + noteAddendum;
 
-                // mark as high priority if we don't have many in stock
-             //   if ((component.Quantity + pendingBeforeStart) < (component.MinimumStock) / 3)
-             //   {
-             //       inventoryOrder.Rush = true;
-             //   }
+
                 inventoryOrder.PrintOperator = inventoryOrderOwner;
 
                 var inventoryOrderTrackingData = ATTrackingBase.OrderDataToOrderTrackingData(inventoryOrder);

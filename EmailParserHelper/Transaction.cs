@@ -97,6 +97,7 @@ namespace EmailParserHelper
             Color = itemColor;
             SizeInInches = itemSizeInInches;
             ProductData = inventoryBase.FindItemRecord(ItemName, Color, SizeInInches);
+            IsDigital = itemName.Contains("STL File");
         }
 
         private void RefreshProductData()
@@ -165,6 +166,8 @@ namespace EmailParserHelper
         public double ItemPriceQuantity { get; set; } = 1;
 
         public string SKU { get; set; }
+
+        public bool IsDigital { get; set; }
         public double TotalPrice => ItemPrice * Quantity / ItemPriceQuantity;
         
         public bool Custom { get; set; }

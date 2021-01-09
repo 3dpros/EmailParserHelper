@@ -14,6 +14,9 @@ namespace EmailParserHelper.Expenses
             var expenseEntryRegex = @"(.*\r\n.*)\r\n*\s*Sold by";
             var matches = Regex.Matches(EmailBody, expenseEntryRegex);
             var NominalOrderTotalMatches = Regex.Matches(EmailBody, @"Item Subtotal\:\s\$(\d*\.\d*)");
+            if (NominalOrderTotalMatches.Count == 0)
+            { NominalOrderTotalMatches = Regex.Matches(EmailBody, @"Order Total\:\s\$(\d*\.\d*)"); }
+
 
             var NominalOrderTotalMatchStrings = from Match item in NominalOrderTotalMatches
                                                 select item.Groups[1].Value;
