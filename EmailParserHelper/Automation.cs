@@ -249,6 +249,7 @@ namespace EmailParserHelper
                 Log.Add("Total Material Cost:" + totalMaterialCost);
                 Log.Add("Adding Order " + orderID.ToString());
 
+                //handle inventory counts and request generation
                 foreach (var transactionRecord in transactionRecordPairs)
                 {
                     if (transactionRecord.TransactionType != TransactionTypes.UntrackedCustom)
@@ -257,10 +258,6 @@ namespace EmailParserHelper
                         if (!dryRun)
                         {
                             inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Product, transactionRecord.Transaction.Quantity, out components, orderID);
-                        }
-                        else
-                        {
-                            // components = transactionRecord.Record.
                         }
                         foreach (InventoryComponent component in components)
                         {
@@ -396,7 +393,6 @@ namespace EmailParserHelper
             {
                 Log.Add("Record Exists");
 
-                // var asanaID = airtableOrderRecord.AsanaTaskID;
                 if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord?.ShipDate.Year < 2010))
                 {
                     Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
@@ -405,18 +401,14 @@ namespace EmailParserHelper
                         throw new Exception("Order shipped more than once: " + airtableOrderRecord?.OrderID);
                     }
                 }
-                // if (asanaID != "")
                 {
-                    //Log.Add("Checking Asana ID " + asanaID);
                     Log.Add("Record Exists");
-                    //AsanaTask currentTask = Asana.GetTaskByTaskID(Int64.Parse(asanaID));
                     var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
                     Log.Add("found order tracking record: " + orderTrackingRecord.Description);
                     if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
                         {
                             airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
-                            //airtableOrderRecord.PrintOperator = orderTrackingRecord.PrintOperator;
                             Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
                         }
 
@@ -438,6 +430,13 @@ namespace EmailParserHelper
 
                         if (!dryRun)
                         {
+                            foreach(var txnRecordID in orderTrackingRecord.Transactions)
+                            {
+                                var transactionData = TransactionsBase.GetTransactionByRecordID(txnRecordID);
+                                var product = inventoryBase.GetItemRecordByRecordID(transactionData.ItemRecordId);
+                                Log.Add($"Ship-time inventory - decremented {product.UniqueName} by {transactionData.Quantity}");
+                               // inventoryBase.UpdateInventoryCountForTransaction(product, transactionData.Quantity, out var components, orderID);
+                            }
                             //currentTask.Delete();
                         }
                         if (orderTrackingRecord != null)

@@ -40,7 +40,7 @@ namespace EmailParserHelperTests
         public void ShipOrder()
         {
             var test = new Automation();
-            test.CompleteOrder("1885", "0.00");
+            test.CompleteOrder("1772497744", "0.00");
 
         }
         [Fact]
@@ -380,22 +380,12 @@ Shop:               Al Billington
 --------------------------------------
 
 Transaction ID:     2124091829
-Item:               Aeropress Compatible Organizer [3D Printable STL File] | 3D printed coffee maker counter organizer
+Item:               zzz - dummy item
 Quantity:           1
 Item price:         $5.00
 
 --------------------------------------
 Item total:         $5.00
-
---------------------------------------
-
-Transaction ID:     2124091829
-Item:               Aeropress Compatible Organizer | 3D printed coffee maker counter organizer
-Quantity:           1
-Item price:         $15.00
-
---------------------------------------
-Item total:         $15.00
 
 Applied discounts
 - ICANWAIT
@@ -431,7 +421,7 @@ Shipping Address:
         {
             var inventoryBase = new AirtableItemLookup();
 
-            var test = new Automation(true);
+            var test = new Automation();
             Order order;
             test.ProcessOrder(etsyEmailDummy, "", "Etsy", out order, out _);
 
