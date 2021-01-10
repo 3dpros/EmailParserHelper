@@ -13,8 +13,8 @@ namespace EmailParserHelperTests
         [Fact]
         public void parseEtsyEmail()
         {
-            var sut = new EtsyOrder(etsyEmailDummy, "");
-
+            var sut = new EtsyOrder(etsyEmailDesignCode, "");
+            var test = sut.Transactions[0].HumanReadablePersonalization;
             Assert.Equal("1518764068", sut.OrderID);
             Assert.Equal("http://www.etsy.com/your/orders/1518764068", sut.OrderUrl);
             Assert.Equal(9, sut.Transactions.Count);

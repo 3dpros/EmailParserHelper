@@ -96,6 +96,7 @@ namespace EmailParserHelper
                 var owner = "";
                 var DescriptionAddendum = ""; //hack until description is migrated from email parser
                 var DesignerURL = ""; //hack until description is migrated from email parser
+                var Personalization = "";
 
                 var hasCustomComponents = false;
                 var hasInventoryComponents = false;
@@ -136,16 +137,15 @@ namespace EmailParserHelper
                     }
                     else
                     {
+
                         // add a link to the internal designer with the design code
                         if (!string.IsNullOrEmpty(currentProductData.BaseUrl))
                         {
                             DescriptionAddendum += "\n" + currentProductData.BaseUrl;
                             DesignerURL = currentProductData.BaseUrl;
-                            // ditching this until asana API supports special characters
                             if (!string.IsNullOrEmpty(transaction.DesignerUrlFull))
                             {
-                                DesignerURL = transaction.DesignerUrlFull;
-
+                                DesignerURL = transaction.DesignerUrlFull;                              
                             }
                             else
                             {
@@ -180,7 +180,10 @@ namespace EmailParserHelper
                         Product = currentProductData,
                         TransactionType = currentTransactionType
                     });
-
+                    if (transaction.HumanReadablePersonalization != "")
+                    {
+                        Personalization = transaction.HumanReadablePersonalization;
+                    }
                 }
 
                 //if the order has only one product, update the product DB with the image
@@ -337,6 +340,7 @@ namespace EmailParserHelper
 
                     orderTracking.OrderURL = orderData.OrderUrlMarkdown;
                     orderTracking.DesignerURL = DesignerURL;
+                    orderTracking.Personalization = Personalization;
                     orderTracking.Stage = startingOrderStage;
                     orderTracking.OrderNote = orderData.Notes;
                     ATTrackingBase.CreateOrderRecord(orderTracking, out orderRecordId);

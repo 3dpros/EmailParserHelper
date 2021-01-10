@@ -1,4 +1,5 @@
 ﻿using AirtableClientWrapper;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -30,6 +31,25 @@ namespace EmailParserHelper
             get
             {
                 return HttpUtility.UrlDecode(Personalization);
+            }
+        }
+
+        public string HumanReadablePersonalization
+        {
+            get
+            {
+                var matches = Regex.Matches(CleanedPersonalization, @"\=([^|]*)\|");
+                if(matches.Count == 0)
+                {
+                    return CleanedPersonalization;
+                }
+                var strings = new List<string>();
+                foreach(Match match in matches)
+                {
+                    strings.Add(match.Groups[1].Value);
+                }
+                return String.Join("|", strings);
+                // TopText=TEST|BottomText=ORDER|color=black
             }
         }
 
