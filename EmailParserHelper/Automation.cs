@@ -257,7 +257,7 @@ namespace EmailParserHelper
                         List<InventoryComponent> components = new List<InventoryComponent>();
                         if (!dryRun)
                         {
-                            inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Product, transactionRecord.Transaction.Quantity, out components, orderID);
+                            // inventoryBase.UpdateInventoryCountForTransaction(transactionRecord.Product, transactionRecord.Transaction.Quantity, out components, orderID);
                         }
                         foreach (InventoryComponent component in components)
                         {
@@ -388,14 +388,17 @@ namespace EmailParserHelper
 
             var ATid = "";
             var airtableOrderRecord = ATbase.GetRecordByOrderID(orderID, out ATid);
-            Log.Add("Got Airtable Record");
-            if (airtableOrderRecord != null)
+            Log.Add("Got pay table Record");
+            var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
+            Log.Add("found order tracking record: " + orderTrackingRecord.Description);
+
+            if (airtableOrderRecord != null && orderTrackingRecord != null)
             {
                 Log.Add("Record Exists");
 
-                if (!(airtableOrderRecord.ShipDate == null || airtableOrderRecord?.ShipDate.Year < 2010))
+                if (!(orderTrackingRecord?.ShipDate == null || orderTrackingRecord.ShipDate.Year < 2010))
                 {
-                    Log.Add("Shipper already set to  " + airtableOrderRecord.Shipper + ", no action taken.");
+                    Log.Add("Ship Date already set to  " + orderTrackingRecord?.ShipDate + ", no action taken.");
                     if (airtableOrderRecord.Channel.ToLower() == "etsy")
                     {
                         throw new Exception("Order shipped more than once: " + airtableOrderRecord?.OrderID);
@@ -403,8 +406,6 @@ namespace EmailParserHelper
                 }
                 {
                     Log.Add("Record Exists");
-                    var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
-                    Log.Add("found order tracking record: " + orderTrackingRecord.Description);
                     if (!string.IsNullOrEmpty(orderTrackingRecord.PrintOperator))
                     {
                         {
@@ -435,7 +436,7 @@ namespace EmailParserHelper
                                 var transactionData = TransactionsBase.GetTransactionByRecordID(txnRecordID);
                                 var product = inventoryBase.GetItemRecordByRecordID(transactionData.ItemRecordId);
                                 Log.Add($"Ship-time inventory - decremented {product.UniqueName} by {transactionData.Quantity}");
-                               // inventoryBase.UpdateInventoryCountForTransaction(product, transactionData.Quantity, out var components, orderID);
+                                inventoryBase.UpdateInventoryCountForTransaction(product, transactionData.Quantity, out var components, orderID);
                             }
                             //currentTask.Delete();
                         }
