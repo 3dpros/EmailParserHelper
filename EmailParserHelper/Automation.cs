@@ -14,9 +14,7 @@ namespace EmailParserHelper
 
     public class Automation
     {
-        private const string HighPriorityProjectName = "AHigh Priority";
-        readonly string defaultShipper = "Leah Perkuhn";
-        readonly string altShipper = "Daniel English";
+        readonly string defaultShipper = "James English";
         readonly string warehouseManager = "Daniel English";
 
         private AirtableItemLookup inventoryBase = new AirtableItemLookup();
@@ -399,11 +397,11 @@ namespace EmailParserHelper
             if (airtableOrderRecord != null && orderTrackingRecord != null)
             {
                 Log.Add("Record Exists");
-
-                if (!(orderTrackingRecord?.ShipDate == null || orderTrackingRecord.ShipDate.Year < 2010))
+                //sometimes shopify sends duplicate notifications
+                if (orderTrackingRecord?.ShipDate.AddHours(2) > DateTime.Now)
                 {
-                    Log.Add("Ship Date already set to  " + orderTrackingRecord?.ShipDate + ", no action taken.");
-                    if (airtableOrderRecord.Channel.ToLower() == "etsy")
+                    Log.Add("Item was recently shipped: " + orderTrackingRecord?.ShipDate + ", no action taken.");
+                  //  if (airtableOrderRecord.Channel.ToLower() == "etsy")
                     {
                         throw new Exception("Order shipped more than once: " + airtableOrderRecord?.OrderID);
                     }
@@ -420,6 +418,9 @@ namespace EmailParserHelper
                         airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
+                        airtableOrderRecord.ShipperPay += orderTrackingRecord.ShipperPay;
+                        Log.Add("Setting shipper pay to " + airtableOrderRecord.ShipperPay);
+
                         airtableOrderRecord.ShippingCost = double.Parse(shippingCost);
                         Log.Add("Setting actual shipping cost to " + airtableOrderRecord.ShippingCost.ToString());
 
@@ -431,6 +432,7 @@ namespace EmailParserHelper
                         ATTrackingBase.CreateOrderRecord(airtableOrderRecord, true);
 
                         var inventoryBase = new AirtableItemLookup();
+                        var inventoryLocationBase = new AirtableInventory();
                         inventoryBase.UpdateCompletedOrderComponentEntries(orderID);
 
                         if (!dryRun)
@@ -441,6 +443,11 @@ namespace EmailParserHelper
                                 var product = inventoryBase.GetItemRecordByRecordID(transactionData.ItemRecordId);
                                 Log.Add($"Ship-time inventory - decremented {product.UniqueName} by {transactionData.Quantity}");
                                 inventoryBase.UpdateInventoryCountForTransaction(product, transactionData.Quantity, out var components, orderID);
+                                foreach(var component in components)
+                                {
+                                    Log.Add($"multi location inventory test - decremented {component.Name} at {airtableOrderRecord.Shipper} by {transactionData.Quantity}");
+                                    inventoryLocationBase.IncrementQuantityOfItem(component.Name, airtableOrderRecord.Shipper, -transactionData.Quantity);
+                                }
                             }
                             //currentTask.Delete();
                         }

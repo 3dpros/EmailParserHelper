@@ -22,7 +22,28 @@ namespace EmailParserHelperTests
             var mystring = sut.LongDescription;
         }
 
+        string htmlEmailSectionDays = @"    
+< div class=""normal-copy copy""
+     style=""font-family: arial, helvetica, sans-serif; color: #444444; font-size: 16px; line-height: 24px;"">    Processing time:
+                                            3&ndash;122 business days</div>    
+        </td>
+    </tr>
+</table></div>";
 
+
+        string htmlEmailSectionWeeks = @"<div class=""normal-copy copy"" 
+     style=""font-family: arial, helvetica, sans-serif; color: #444444; font-size: 16px; line-height: 24px;"">    Processing time:
+                                            2&ndash;10 weeks</div>    
+        </td>";
+
+        [Fact]
+        public void parseEtsyEmailWithHTML()
+        {
+            var sut = new EtsyOrder(etsyEmailDesignCode, htmlEmailSectionDays);
+            Assert.Equal(122, sut.ProcessingTimeInDays);
+            sut = new EtsyOrder(etsyEmailDesignCode, htmlEmailSectionWeeks);
+            Assert.Equal(50, sut.ProcessingTimeInDays);
+        }
         [Fact]
         public void ParseShopifyEmail()
         {
@@ -546,7 +567,7 @@ This email was sent from a notification-only address that cannot accept incoming
         public void CompleteInventoryRequestOrder_ParserMethod()
         {
             var log = new List<string>();
-            ParserMethods.CreateManualInventoryOrder("ZZZ - Dummy", 10);
+           // ParserMethods.CreateManualInventoryOrder("ZZZ - Dummy", 10);
             var fields = new NameValueCollection();
             fields.Add("Task Name", "(10/20) ZZZ - Dummy");
             ParserMethods.CompleteInventoryRequestOrder(fields, ref log, true);

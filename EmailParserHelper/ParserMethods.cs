@@ -88,18 +88,10 @@ namespace EmailParserHelper
                 log.Add("starting complete inventory request order: " + fields["Task Name"]);
                 int.TryParse(fields["Requested Quantity"], out int requestedQuantity);
                 int.TryParse(fields["Produced Quantity"], out int producedQuantity);
-                if (producedQuantity != 0)
-                {
-                    automation.CompleteInventoryRequest(fields["Component ID"], producedQuantity, requestedQuantity);
-                    log.Add("updated inventory quantities.");
-                }
-                else
-                {
-                    //deprecate this once new method is validated
-                    automation.CompleteInventoryRequest(fields["Task Name"]);
-                    log.Add("updated inventory quantities (Legacy approach, no produced quantity specified).");
 
-                }
+                automation.CompleteInventoryRequest(fields["Component ID"], producedQuantity, requestedQuantity);
+                log.Add("updated inventory quantities.");
+
                 if (!string.IsNullOrEmpty(fields["Order ID"]))
                 {
                     automation.UpdateCompletedInventoryRequestOrderAirtable(fields["Order ID"], fields["Owner"]);
@@ -124,14 +116,27 @@ namespace EmailParserHelper
             return false;
         }
 
-        public static bool CreateManualInventoryOrder(string componentName, int quantity)
+        public static bool CreateManualInventoryOrder(NameValueCollection fields)
         {
             var inventoryBase = new AirtableItemLookup();
             var auto = new Automation();
-            var component = inventoryBase.GetComponentByName(componentName, false);
+            var component = inventoryBase.GetComponentByName(fields["Item Name"], false);
             if (component != null)
             {
-                auto.GenerateInventoryRequest(component, quantity);
+                auto.GenerateInventoryRequest(component, int.Parse(fields["Quantity"]));
+                return true;
+            }
+            return false;
+        }
+
+        public static bool CreateAutomaticInventoryOrder(string componentID)
+        {
+            var inventoryBase = new AirtableItemLookup();
+            var auto = new Automation();
+            var component = inventoryBase.GetComponentByID(componentID);
+            if (component != null)
+            {
+                auto.GenerateInventoryRequest(component);
                 return true;
             }
             return false;

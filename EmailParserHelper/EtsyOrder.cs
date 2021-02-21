@@ -40,21 +40,26 @@ namespace EmailParserHelper
             OrderTotal = MatchNumber(@"Order Total\:\s*\$\s*([^\n\r]*)?",1);
             ShippingCharge = MatchNumber(@"Shipping\s*\:\s*\$\s*([^\s\n\r\(\)]*)", 1);
             ImageURL = Regex.Match(HTMLOrderEmail, @"(https:\/\/i.etsystatic.com\/.*)\""")?.Groups[1]?.Value;
-            DelayOrder = Regex.Match(plainTextEtsyOrderEmail, "ICANWAIT", RegexOptions.Singleline).Success;
-            if(!DelayOrder)
+            if(Regex.Match(plainTextEtsyOrderEmail, "ICANWAIT", RegexOptions.Singleline).Success)
             {
-                DelayOrder = Regex.Match(HTMLOrderEmail, "3 weeks", RegexOptions.Singleline).Success;
+                ProcessingTimeInDays = 15;
             }
-
-            var transactionsProcessingTimeList = (from txn in Transactions
-                                             where txn.ProductData != null
-                                             select txn.ProductData.ProcessingTime).ToList();
-            if (transactionsProcessingTimeList.Count > 0)
+            var processingTimeFromEmail = Regex.Match(HTMLOrderEmail, @"Processing time.*?(\d+)\s(weeks|business days)", RegexOptions.Singleline);
+            if (processingTimeFromEmail.Success)
             {
-                ProcessingTimeInDays = Math.Max(transactionsProcessingTimeList.Max(), EtsyMinimumProcessingDays);
+                var multiplier = (processingTimeFromEmail.Groups[2].Value == "weeks") ? 5 : 1; // use 5 for weeks since it is in business days
+                ProcessingTimeInDays = int.Parse(processingTimeFromEmail.Groups[1].Value) * multiplier;
             }
-
-
+            else // if we cant figure out the processing time from etsy, try to do it from the product processing times in airtable
+            {
+                var transactionsProcessingTimeList = (from txn in Transactions
+                                                      where txn.ProductData != null
+                                                      select txn.ProductData.ProcessingTime).ToList();
+                if (transactionsProcessingTimeList.Count > 0)
+                {
+                    ProcessingTimeInDays = Math.Max(transactionsProcessingTimeList.Max(), EtsyMinimumProcessingDays);
+                }
+            }
         }
 
         public EtsyOrder(NameValueCollection fields) : base(fields)
@@ -151,7 +156,7 @@ namespace EmailParserHelper
                         entries.Remove(colorKey);
                     }
                 }
-                foreach (var sizeKey in new string[] { "size", "size/options", "height", "length" })
+                foreach (var sizeKey in new string[] { "size", "size/options", "height", "length", "width", "misura" })
                 {
                     if (entries.ContainsKey(sizeKey))
                     {

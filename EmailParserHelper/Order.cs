@@ -21,8 +21,8 @@ namespace EmailParserHelper
             OrderID = fields["Order ID"];
             OrderTotal = double.Parse(fields["Order Total"]);
             ManualDescription = fields["Short Description"];
-            _dueDateKnown = DateTime.Parse(fields["Due Date"]);
-            _dateIsKnown = true;
+
+            _dateIsKnown = DateTime.TryParse(fields["Due Date"], out _dueDateKnown);
             int.TryParse(fields["Size"], out int size);
             int.TryParse(fields["Quantity"], out int quantity);
             int.TryParse(fields["SetQuantity"], out int setQuantity);
@@ -138,8 +138,7 @@ namespace EmailParserHelper
         public string ImageURL { get; set; } = "";
         public double OrderTotal { get; set; } = 0;
         public double ShippingCharge { get; set; } = 0;
-        public bool DelayOrder = false;
-
+        public bool Priority { get; set; } = false;
         public int TotalNumberOfItems { get
             {
                 return (from items in Transactions
@@ -161,18 +160,18 @@ namespace EmailParserHelper
                 }
                 if (UseBusinessDaysForProcessingTime)
                 {
-                    return AddBusinessDays(DateTime.Now, DelayOrder?24:ProcessingTimeInDays);
+                    return AddBusinessDays(DateTime.Now, ProcessingTimeInDays);
                 }
                 else
                 {
-                    return DateTime.Now.AddDays(DelayOrder?24:ProcessingTimeInDays);
+                    return DateTime.Now.AddDays(ProcessingTimeInDays);
                 }
             }
         }
 
         public bool MarkedAsGift { get; set; }
 
-        protected int ProcessingTimeInDays = 6;
+        public int ProcessingTimeInDays { get; set; } = 6;
         protected bool UseBusinessDaysForProcessingTime = true;
 
         protected string MatchRegex(string pattern, int group = 0)

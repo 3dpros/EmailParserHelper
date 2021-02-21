@@ -38,6 +38,10 @@ namespace EmailParserHelper
         {
             get
             {
+                if(string.IsNullOrEmpty(CleanedPersonalization))
+                {
+                    return "";
+                }
                 var matches = Regex.Matches(CleanedPersonalization, @"\=([^|]*)\|");
                 if(matches.Count == 0)
                 {
