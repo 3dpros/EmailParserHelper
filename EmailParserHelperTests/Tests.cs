@@ -96,6 +96,19 @@ namespace EmailParserHelperTests
             Assert.True(component.Pending - previousPending == component.NumberOfBatches * component.BatchSize);
         }
 
+        [Fact]
+        public void CreateInventoryRequestOrderForLocation()
+        {
+            var inventoryBase = new AirtableItemLookup();
+
+            var test = new Automation();
+            var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
+            var previousQuantity = component.Quantity;
+            var previousPending = component.Pending;
+            test.GenerateInventoryRequestByLocation(component, 3, "James English");
+
+        }
+
         string shopifyEmail = @"**  3x Weight Plate Ornament - Default Text / Red (SKU:
 WeightPlateOrnament_red) - $14.00 each ]]
 *  3x Weight Plate Ornament - Default Text / Black with Gray Text
@@ -467,7 +480,7 @@ Shipping Address:
             var component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);
             var previousQuantity = component.Quantity;
             var previousPending = component.Pending;
-            test.CompleteInventoryRequest("ZZZ - Dummy", 3, 5);
+            test.CompleteInventoryRequest(component.id, 3, 5);
             inventoryBase.UpdateComponentRecord(component);
 
             component = inventoryBase.GetComponentByName("ZZZ - Dummy", false);

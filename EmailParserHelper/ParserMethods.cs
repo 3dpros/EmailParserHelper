@@ -89,13 +89,12 @@ namespace EmailParserHelper
                 int.TryParse(fields["Requested Quantity"], out int requestedQuantity);
                 int.TryParse(fields["Produced Quantity"], out int producedQuantity);
 
-                automation.CompleteInventoryRequest(fields["Component ID"], producedQuantity, requestedQuantity);
+                automation.CompleteInventoryRequest(fields["Component ID"], producedQuantity, requestedQuantity, fields["Location"]);
                 log.Add("updated inventory quantities.");
 
                 if (!string.IsNullOrEmpty(fields["Order ID"]))
                 {
-                    automation.UpdateCompletedInventoryRequestOrderAirtable(fields["Order ID"], fields["Owner"]);
-
+                    automation.UpdateCompletedInventoryRequestOrder(fields["Order ID"], fields["Component ID"], fields["Owner"], producedQuantity);
                 }
                 else
                 {
@@ -137,6 +136,24 @@ namespace EmailParserHelper
             if (component != null)
             {
                 auto.GenerateInventoryRequest(component);
+                return true;
+            }
+            return false;
+        }
+
+        public static bool CreateAutomaticInventoryOrderByLocation(NameValueCollection fields)
+        {
+            var inventoryBase = new AirtableItemLookup();
+            var auto = new Automation();
+
+            var componentID = fields["Component ID"];
+            var location = fields["Location"];
+            int.TryParse(fields["Quantity"], out int requestedQuantity);
+
+            var component = inventoryBase.GetComponentByID(componentID);
+            if (component != null)
+            {
+                auto.GenerateInventoryRequestByLocation(component, requestedQuantity, location);
                 return true;
             }
             return false;
