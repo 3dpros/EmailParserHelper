@@ -400,7 +400,7 @@ namespace EmailParserHelper
             {
                 Log.Add("Record Exists");
                 //If ship date is already set on the tracking record, dont process it again.  If not, it is likely a reship
-                if (orderTrackingRecord.ShipDate != null)
+                if (orderTrackingRecord.ShipDate.Year > 2000)
                 {
                     Log.Add("Item was already shipped: " + orderTrackingRecord?.ShipDate + ", no action taken.");
                   //  if (airtableOrderRecord.Channel.ToLower() == "etsy")
@@ -448,6 +448,7 @@ namespace EmailParserHelper
                                 foreach(var component in components)
                                 {
                                     Log.Add($"multi location inventory test - decremented {component.Name} at {airtableOrderRecord.Shipper} by {transactionData.Quantity}");
+                                    Log.Add($"Component ID: {component.id}");
                                     inventoryLocationBase.IncrementQuantityOfItem(component.id, airtableOrderRecord.Shipper, -transactionData.Quantity);
                                 }
                             }
