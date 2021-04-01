@@ -505,47 +505,46 @@ namespace EmailParserHelper
 
         public void UpdateCompletedInventoryRequestOrder(string orderID, string componentID, string printOperator, int quantityProduced)
         {
-            if (quantityProduced == 0)
+            Log.Add("Checking Order for Order ID: " + orderID);
+            var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);
+            if (order == null)
             {
-                Log.Add("no units were produced, not generating order record");
-                return;
+                order = ATOrdersBase.newOrderData(orderID);
+                Log.Add("getting component by ID: " + componentID);
+                var component = ATItemLookupBase.GetComponentByID(componentID);
+                Log.Add("found component: " + component.Name);
+                order.TotalPrice = component.InternalPrice * quantityProduced;
+
+                order.Channel = "Internal";
+                order.Description = $"[INV - {quantityProduced}x] {component.Name}"; ;
+
+                ATOrdersBase.CreateOrderRecord(order);
+                //throw new Exception("Order entry was not found in airtable for the specified Order ID: " + orderID);
+            }
+
+            order.PrintOperator = printOperator;
+            order.Shipper = printOperator;
+            Log.Add("Set operator and shipper to " + printOperator);
+            if (!(order.ShipDate.Year > 2000))
+            {
+                Log.Add("Set ship date to now");
+                order.ShipDate = DateTime.Now;
             }
             else
             {
-                Log.Add("Checking Order for Order ID: " + orderID);
-                var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);
-                if (order == null)
-                {
-                    order = ATOrdersBase.newOrderData(orderID);
-                    Log.Add("getting component by ID: " + componentID);
-                    var component = ATItemLookupBase.GetComponentByID(componentID);
-                    Log.Add("found component: " + component.Name);
-                    order.TotalPrice = component.InternalPrice * quantityProduced;
-
-                    order.Channel = "Internal";
-                    order.Description = $"[INV - {quantityProduced}x] {component.Name}"; ;
-
-                    ATOrdersBase.CreateOrderRecord(order);
-                    //throw new Exception("Order entry was not found in airtable for the specified Order ID: " + orderID);
-                }
-
-                Log.Add("Found Order for Asana Task with Order ID " + order);
-                order.PrintOperator = printOperator;
-                order.Shipper = printOperator;
-                Log.Add("Set operator and shipper to " + printOperator);
-                if (!(order.ShipDate.Year > 2000))
-                {
-                    Log.Add("Set ship date to now");
-                    order.ShipDate = DateTime.Now;
-                }
-                else
-                {
-                    Log.Add("Ship Date already set to " + order.ShipDate.ToString());
-                }
+                Log.Add("Ship Date already set to " + order.ShipDate.ToString());
+            }
+            if (quantityProduced == 0)
+            {
+                Log.Add("no units were produced, not generating order record in pay base");
+            }
+            else
+            {
                 ATOrdersBase.CreateOrderRecord(order, true);
-                ATTrackingBase.CreateOrderRecord(order, true);
-                Log.Add("Updated Order ID " + order.OrderID);
-            }     
+            }
+            ATTrackingBase.CreateOrderRecord(order, true);
+            Log.Add("Updated Order ID " + order.OrderID);
+            
         }
 
         public void ProcessExpense(List<string> log, NameValueCollection fields)
@@ -597,15 +596,20 @@ namespace EmailParserHelper
                 ATbase.CreateExpensesRecord(airtableExpensesEntry);
             }
         }
-        public void ProcessRefund(List<string> log, string orderID, double amountRefunded)
+        public void ProcessRefund(List<string> log, string orderID, double amountRefunded, string reason)
         {
             var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);
             if (order != null)
             {
                 order.AmountRefunded = amountRefunded;
                 ATOrdersBase.CreateOrderRecord(order, true);
-                var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out string record);
-               // orderTrackingEntryToRefund.tra
+                // if the refund is due to a cancellation, mark the order tracking entry card
+                if (reason.ToLower().Contains("cancel"))
+                {
+                    var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out string record);
+                    orderTrackingEntryToRefund.Cancelled = true;
+                    ATTrackingBase.UpdateOrderRecord(orderTrackingEntryToRefund);
+                }
 
             }
             else
@@ -624,7 +628,7 @@ namespace EmailParserHelper
             List<string> printerNames = new List<string>();
             var inventoryOrder = ATOrdersBase.newOrderData("I_" + Guid.NewGuid().ToString());
          
-            cardName = $"[TEST - DO NOT PRINT] {component.Name}";
+            cardName = $"[INV] {component.Name}";
             var preferredPrinter = ATItemLookupBase.GetPreferredPrinter(component);
             inventoryOrder.TotalPrice = component.InternalPrice * quantity;           
 

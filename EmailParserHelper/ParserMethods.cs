@@ -172,7 +172,8 @@ namespace EmailParserHelper
             double amount;
             double.TryParse(fields["Refund Amount"], out amount);
             var orderID = fields["Order ID"];
-            auto.ProcessRefund(log, orderID, amount);
+            var reason = fields["Reason"];
+            auto.ProcessRefund(log, orderID, amount, reason);
             log.Add($"refunded order {orderID} for {amount}");
             return true;
         }
