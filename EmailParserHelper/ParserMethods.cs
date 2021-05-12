@@ -122,7 +122,7 @@ namespace EmailParserHelper
             var component = inventoryBase.GetComponentByName(fields["Item Name"], false);
             if (component != null)
             {
-                auto.GenerateInventoryRequest(component, int.Parse(fields["Quantity"]));
+                auto.GenerateInventoryRequestByLocation(component, int.Parse(fields["Quantity"]), fields["Destination"]);
                 return true;
             }
             return false;

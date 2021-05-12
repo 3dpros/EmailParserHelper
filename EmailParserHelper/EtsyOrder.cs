@@ -183,13 +183,15 @@ namespace EmailParserHelper
                     transaction.ItemPriceQuantity = setQuantity;
 
                 }
-                if (entries.ContainsKey("options"))
+                foreach (var optionsKey in new string[] { "options", "model" })
+                if (entries.ContainsKey(optionsKey))
                 {
-                    if (entries["options"].Contains("custom"))
+                    if (entries[optionsKey].Contains("custom"))
                     {
                         transaction.Custom = true;
                     }
-                    entries.Remove("options");
+                    transaction.ItemName += " - " + entries[optionsKey];
+                    entries.Remove(optionsKey);
                 }
                 if (entries.Count > 0)
                 {
