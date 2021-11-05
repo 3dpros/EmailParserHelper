@@ -423,7 +423,7 @@ namespace EmailParserHelper
                         airtableOrderRecord.ShipperPay += orderTrackingRecord.ShipperPay;
                         Log.Add("Setting shipper pay to " + airtableOrderRecord.ShipperPay);
 
-                        airtableOrderRecord.ShippingCost = double.Parse(shippingCost);
+                        airtableOrderRecord.ShippingCost = string.IsNullOrEmpty(shippingCost)?double.Parse(shippingCost):0;
                         Log.Add("Setting actual shipping cost to " + airtableOrderRecord.ShippingCost.ToString());
 
                         airtableOrderRecord.ShipDate = DateTime.Now;
