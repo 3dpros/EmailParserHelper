@@ -606,9 +606,12 @@ namespace EmailParserHelper
                 // if the refund is due to a cancellation, mark the order tracking entry card
                 if (reason.ToLower().Contains("cancel"))
                 {
-                    var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out string record);
-                    orderTrackingEntryToRefund.Cancelled = true;
-                    ATTrackingBase.UpdateOrderRecord(orderTrackingEntryToRefund);
+                    var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out _);
+                    if (orderTrackingEntryToRefund != null)
+                    {
+                        orderTrackingEntryToRefund.Cancelled = true;
+                        ATTrackingBase.UpdateOrderRecord(orderTrackingEntryToRefund);
+                    }
                 }
 
             }

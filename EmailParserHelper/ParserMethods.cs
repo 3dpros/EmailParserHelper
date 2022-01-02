@@ -168,16 +168,25 @@ namespace EmailParserHelper
 
         public static bool ProcessRefund(ref List<string> log, NameValueCollection fields)
         {
-            var auto = new Automation();
-            double amount;
-            double.TryParse(fields["Refund Amount"], out amount);
-            var orderID = fields["Order ID"];
-            var reason = fields["Reason"];
-            auto.ProcessRefund(log, orderID, amount, reason);
-            log.Add($"refunded order {orderID} for {amount}");
-            return true;
+            try
+            {
+                var auto = new Automation();
+                double amount;
+                double.TryParse(fields["Refund Amount"], out amount);
+                var orderID = fields["Order ID"];
+                var reason = fields["Reason"];
+                log.Add($"start cancelling order {orderID} for amount {amount} and reason {reason}");
+                auto.ProcessRefund(log, orderID, amount, reason);
+                log.Add($"refunded order {orderID} for {amount}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                log.Add(e.StackTrace);
+                log.Add(e?.InnerException?.Message);
+                log.Add(e.Message);
+            }
+            return false;
         }
-
     }
-
 }

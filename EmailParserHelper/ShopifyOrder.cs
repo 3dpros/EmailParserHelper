@@ -23,11 +23,21 @@ namespace EmailParserHelper
                                select item.Groups[1].Value.Trim();
             InitializeShopifyOrderEmailTransactions(matchStrings.ToList());
             string emailAddressRegex = @"Customer Email\:\s*(.*)";
-            string amazonOrderPattern = @"marketplace\.amazon\.com";
+            string amazonOrderPattern = @"mail\.codisto\.com";
             var emailAddress = Regex.Match(plainTextOrderEmail, emailAddressRegex).Groups[1].Value;
             var isAmazon = Regex.Match(emailAddress, amazonOrderPattern).Success;
 
-            ProcessingTimeInDays = isAmazon? AmazonProcessingDays : ShopifyProcessingDays;
+            var transactionsProcessingTimeList = (from txn in Transactions
+                                                      where txn.ProductData != null
+                                                      select txn.ProductData.ProcessingTime).ToList();
+            if (transactionsProcessingTimeList.Count > 0)
+            {
+                ProcessingTimeInDays = transactionsProcessingTimeList.Min();
+            }
+            else
+            {
+                ProcessingTimeInDays = isAmazon ? AmazonProcessingDays : ShopifyProcessingDays;
+            }
             UseBusinessDaysForProcessingTime = !isAmazon;
 
             OrderID = MatchRegex(@"Order Name:\s*#\s*([\d]*)", 1);
