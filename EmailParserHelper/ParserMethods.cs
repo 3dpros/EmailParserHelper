@@ -57,16 +57,27 @@ namespace EmailParserHelper
 
         }
 
-        public static bool ProcessShippedProductOrder(ref List<string> log, NameValueCollection fields, bool dryRun = false)
+        public static bool ProcessShippedProductOrder(ref List<string> log, NameValueCollection fields, bool dryRun = false, bool backfillShipping = false)
        {         
             var automation = new Automation(dryRun);
             try
             {
-                log.Add("starting complete order");
-                var result = automation.CompleteOrder(fields["Order ID"], fields["Shipping Cost"]);
-                log = automation.Log;
+                if (backfillShipping)
+                {
+                    log.Add("starting shipping backfill");
 
-                return result;
+                    automation.BackfillShippingCost(fields["Order ID"], fields["Shipping Cost"]);
+                    log.AddRange(automation.Log);
+                    return true;
+                }
+                else
+                {
+                    log.Add("starting complete order");
+                    var result = automation.CompleteOrder(fields["Order ID"], fields["Shipping Cost"]);
+                    log.AddRange(automation.Log);
+
+                    return result;
+                }
             }
             catch (Exception e)
             {
@@ -178,6 +189,27 @@ namespace EmailParserHelper
                 log.Add($"start cancelling order {orderID} for amount {amount} and reason {reason}");
                 auto.ProcessRefund(log, orderID, amount, reason);
                 log.Add($"refunded order {orderID} for {amount}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                log.Add(e.StackTrace);
+                log.Add(e?.InnerException?.Message);
+                log.Add(e.Message);
+            }
+            return false;
+        }
+
+        public static bool ProcessReturn(ref List<string> log, NameValueCollection fields)
+        {
+            try
+            {
+                var auto = new Automation();
+                double.TryParse(fields["label_cost"], out double amount);
+                var orderID = fields["order_id"];
+                log.Add($"start processing return for order {orderID} for label cost {amount}");
+                auto.ProcessReturn(log, orderID, amount);
+                log.Add($"processed return for order {orderID} for {amount}");
                 return true;
             }
             catch (Exception e)

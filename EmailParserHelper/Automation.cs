@@ -382,6 +382,23 @@ namespace EmailParserHelper
             return true;
         }
 
+        public bool BackfillShippingCost(string orderID, string shippingCost)
+        {
+            Log.Add("Starting Airtable Entry - backfill shipping cost");
+            Log.Add("Checking Order " + orderID);
+
+            var airtableOrderRecord = ATOrdersBase.GetRecordByOrderID(orderID, out _);
+            Log.Add("Got pay table Record");
+            if (airtableOrderRecord != null)
+            {
+                airtableOrderRecord.ShippingCost = (!string.IsNullOrEmpty(shippingCost)) ? double.Parse(shippingCost) : 0;
+                Log.Add("Setting actual shipping cost to " + airtableOrderRecord.ShippingCost.ToString());
+                Log.Add("Order Exists, updating " + orderID.ToString());
+                ATOrdersBase.CreateOrderRecord(airtableOrderRecord, true);
+
+            }
+            return true;
+        }
         public bool CompleteOrder(string orderID, string shippingCost)
         {
             Log.Add("Starting Airtable Entry");
@@ -389,11 +406,9 @@ namespace EmailParserHelper
             //string orderID = fields["Order ID"];
 
             Log.Add("Checking Order " + orderID);
-
-            var ATid = "";
-            var airtableOrderRecord = ATOrdersBase.GetRecordByOrderID(orderID, out ATid);
+            var airtableOrderRecord = ATOrdersBase.GetRecordByOrderID(orderID, out _);
             Log.Add("Got pay table Record");
-            var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out ATid);
+            var orderTrackingRecord = ATTrackingBase.GetRecordByOrderID(orderID, out _);
             Log.Add("found order tracking record: " + orderTrackingRecord.Description);
 
             if (airtableOrderRecord != null && orderTrackingRecord != null)
@@ -423,7 +438,7 @@ namespace EmailParserHelper
                         airtableOrderRecord.ShipperPay += orderTrackingRecord.ShipperPay;
                         Log.Add("Setting shipper pay to " + airtableOrderRecord.ShipperPay);
 
-                        airtableOrderRecord.ShippingCost = string.IsNullOrEmpty(shippingCost)?double.Parse(shippingCost):0;
+                        airtableOrderRecord.ShippingCost = (!string.IsNullOrEmpty(shippingCost))?double.Parse(shippingCost):0;
                         Log.Add("Setting actual shipping cost to " + airtableOrderRecord.ShippingCost.ToString());
 
                         airtableOrderRecord.ShipDate = DateTime.Now;
@@ -507,6 +522,7 @@ namespace EmailParserHelper
         {
             Log.Add("Checking Order for Order ID: " + orderID);
             var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);
+            // we don't create an entry in the pay table until the request is completed in order tracking, so this should always be true
             if (order == null)
             {
                 order = ATOrdersBase.newOrderData(orderID);
@@ -519,7 +535,6 @@ namespace EmailParserHelper
                 order.Description = $"[INV - {quantityProduced}x] {component.Name}"; ;
 
                 ATOrdersBase.CreateOrderRecord(order);
-                //throw new Exception("Order entry was not found in airtable for the specified Order ID: " + orderID);
             }
 
             order.PrintOperator = printOperator;
@@ -598,13 +613,13 @@ namespace EmailParserHelper
         }
         public void ProcessRefund(List<string> log, string orderID, double amountRefunded, string reason)
         {
-            var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);
+            var order = ATOrdersBase.GetRecordByOrderID(orderID, out _);       
             if (order != null)
             {
                 order.AmountRefunded = amountRefunded;
                 ATOrdersBase.CreateOrderRecord(order, true);
                 // if the refund is due to a cancellation, mark the order tracking entry card
-                if (reason.ToLower().Contains("cancel"))
+                // hack because the cancellation emails have a txn ID, not order ID
                 {
                     var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out _);
                     if (orderTrackingEntryToRefund != null)
@@ -613,14 +628,38 @@ namespace EmailParserHelper
                         ATTrackingBase.UpdateOrderRecord(orderTrackingEntryToRefund);
                     }
                 }
-
             }
             else
             {
                 throw new Exception("order to refund not found");
             }
         }
-        
+
+        public void ProcessReturn(List<string> log, string orderID, double labelCost)
+        {
+
+            var ATbase = new AirtableExpenses();
+
+            var airtableExpensesEntry = new ExpensesData("Return Label for Etsy Order " + orderID?.ToString());
+            airtableExpensesEntry.Date = DateTime.Now;
+            airtableExpensesEntry.Value = labelCost;
+            airtableExpensesEntry.Quantity = 1;
+            airtableExpensesEntry.OrderId = orderID;
+
+            ATbase.CreateExpensesRecord(airtableExpensesEntry);
+
+            var orderTrackingEntryToRefund = ATTrackingBase.GetRecordByOrderID(orderID, out _);
+            if (orderTrackingEntryToRefund != null)
+            {
+                orderTrackingEntryToRefund.Returned = true;
+                ATTrackingBase.UpdateOrderRecord(orderTrackingEntryToRefund);
+            }
+            else
+            {
+                throw new Exception("order to return not found");
+            }
+        }
+
         public void GenerateInventoryRequestByLocation(InventoryComponent component, int quantity, string location)
         {
             var pendingBeforeStart = component.Pending;

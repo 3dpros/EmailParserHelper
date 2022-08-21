@@ -121,7 +121,7 @@ namespace EmailParserHelper
             Color = itemColor;
             SizeInInches = itemSizeInInches;
             ProductData = inventoryBase.FindItemRecord(ItemName, Color, SizeInInches);
-            IsDigital = itemName.Contains("STL File");
+            IsDigital = itemName.Contains("STL"); //no other way to tell!
         }
 
         private void RefreshProductData()

@@ -109,48 +109,47 @@ namespace EmailParserHelperTests
 
         }
 
-        string shopifyEmail = @"**  3x Weight Plate Ornament - Default Text / Red (SKU:
-WeightPlateOrnament_red) - $14.00 each ]]
-*  3x Weight Plate Ornament - Default Text / Black with Gray Text
-(SKU: WeightPlateOrnament_blacksilver) - $17.00 each ]]
-*  3x Weight Plate Ornament - Default Text / Black (SKU:
-WeightPlateOrnament_black) - $14.00 each ]]
-*  3x Weight Plate Ornament - Default Text / Silver (SKU:
-WeightPlateOrnament_silver) - $14.00 each ]]
+        string shopifyEmail = @"*  1x 3DPros Honeycomb Lamp(SKU: lamp_honeycomb) - $51.99 each
+]]
 
 _____
+Order Note:
 
-Shipping Cost: $25.00
+Shipping Cost: $0.00
 
-Total Payment: $143.59
+Total Payment: $51.99
 
-Customer Name: Kara Orser
+Customer Name: Jorge.Ramos
 
-Customer Email: karaonbroadway@hotmail.com
+Customer Email: bounce-c535-eedcbm @mail.codisto.com
 
 Order URL:
-https://liftergifts.myshopify.com/admin/orders/3057119330483
+https://liftergifts.myshopify.com/admin/orders/4728957796609
 
-Order ID: 3057119330483
+Order ID: 4728957796609
 
-Order Name: #1909
+Order Name: #3478
 
 Payment processing method:
 
-shopify_payments
+amazon
 
 Delivery method:
-International Shipping
+Amazon FreeEconomy
 
 Shipping address:
 
-Kara Orser
+Jorge.Ramos
 
-53 The Links Rd, Suite 200
+90 WAVERLEY DR, O 301
 
-Toronto, Ontario  M2P1T7
+FREDERICK, Maryland  21702-4826
 
-Canada";
+United States
+
++1 314-282-9402 ext. 05279
+
+Tags:A2CGVGEP9OHYWPAmazonAmazon-USFBM";
 
 
         string etsyEmail = @"------------------------------------------------------
