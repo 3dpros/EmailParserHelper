@@ -285,7 +285,7 @@ namespace EmailParserHelper
                 airtableOrder.Description = (dryRun ? "(TEST)" : "") + orderData.ShortDescription;
                 airtableOrder.Channel = channel;
                 airtableOrder.DueDate = orderData.DueDate;
-                airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 14);
+                airtableOrder.Rush = (airtableOrder.ShippingCharge > 5 && airtableOrder.ShippingCharge < 17);
                 airtableOrder.SalesTax = orderData.SalesTax;
                 airtableOrder.CustomerEmail = orderData.Customer.Email;
                 airtableOrder.OrderURL = orderData.OrderUrl;
