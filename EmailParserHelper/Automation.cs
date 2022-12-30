@@ -432,6 +432,12 @@ namespace EmailParserHelper
                             Log.Add("Setting print operator to " + airtableOrderRecord.PrintOperator.ToString());
                         }
 
+                        if(orderTrackingRecord.StaticPrinterPay != 0)
+                        {
+                            airtableOrderRecord.StaticPrinterPay = orderTrackingRecord.StaticPrinterPay;
+                            Log.Add("Setting static printer pay to " + airtableOrderRecord.ShipperPay);
+                        }
+
                         airtableOrderRecord.Shipper = orderTrackingRecord.Shipper;
                         Log.Add("Setting shipper to " + airtableOrderRecord.Shipper);
 
